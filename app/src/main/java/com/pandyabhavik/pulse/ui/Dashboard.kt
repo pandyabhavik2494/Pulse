@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -207,7 +208,8 @@ private fun DashboardSheet(s: HomeState, current: List<String>, onSave: (List<St
                 style = T.small.copy(fontSize = 13.sp),
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
             )
-            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+            val maxList = (LocalConfiguration.current.screenHeightDp * 0.6f).dp
+            Column(Modifier.heightIn(max = maxList).verticalScroll(rememberScrollState())) {
                 DASH_TILES.groupBy { it.group }.forEach { (group, list) ->
                     Text(group.uppercase(), style = T.caps, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
                     list.forEach { t ->
