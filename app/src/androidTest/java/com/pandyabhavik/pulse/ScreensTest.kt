@@ -224,8 +224,13 @@ class ScreensTest {
         // The milestones: 115 First 5 kg next, then 114 (5% down), down to 85.
         app.assertText("First 5 kg", substring = true)
         app.assertText("5% down", substring = true)
+        app.assertTagShows("whatif_row_0", "First 5 kg", substring = true)
         shot("18-journey")
-        app.assertNoneClipped(required = listOf("journey_chart", "journey_line"))
+        app.assertNoneClipped(required = listOf("whatif_result", "journey_line"))
+        // The trajectory: at the bottom on the cover screen, beside the goal on the inner one.
+        app.scrollTo("journey_chart")
+        shot("18b-journey-trajectory")
+        app.assertNotClipped("journey_chart")
 
         // What if: drag the slider to 1,000 kcal a day; the goal date follows.
         app.scrollTo("whatif_slider")
