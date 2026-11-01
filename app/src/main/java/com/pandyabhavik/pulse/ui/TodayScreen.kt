@@ -659,7 +659,7 @@ private fun BodySection(s: HomeState) {
             BigValue(F.kg(kg), "kg ${if (lastWeighIn!!.date == today) "today" else F.date(lastWeighIn.date, today)}", C.wt, "weight_value")
             s.trendKg?.let { t ->
                 Text(
-                    "Trend ${F.kg(t)} kg (smooths out day-to-day water swings)",
+                    "Trend ${F.kg(t)} kg",
                     style = T.small.copy(fontSize = 13.sp),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
