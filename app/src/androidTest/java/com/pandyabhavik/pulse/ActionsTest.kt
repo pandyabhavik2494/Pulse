@@ -293,4 +293,20 @@ class ActionsTest {
         app.waitFor("the default dashboard to be back") { app.settings().dashboard == com.pandyabhavik.pulse.data.Settings.DEFAULT_DASHBOARD }
         app.waitTag("dash_sleep")
     }
+
+    // ---- Data check --------------------------------------------------------------------------------
+
+    @Test
+    fun dataCheckListsEachTypeAndItsSource() {
+        app.open(Scene.UNDER)
+        app.tab("settings")
+        app.scrollTo("data_check_run")
+        app.click("data_check_run")
+        app.waitTag("data_check_0", 15_000)
+        app.assertTagShows("data_check_0", "Steps")
+        app.assertTagShows("data_check_0", "Fitbit")
+        app.assertTagShows("data_check_3", "Nothing in 7 days")
+        app.scrollTo("data_check_3")
+        shot("56-data-check")
+    }
 }

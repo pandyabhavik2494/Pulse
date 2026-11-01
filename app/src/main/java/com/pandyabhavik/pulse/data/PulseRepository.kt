@@ -150,6 +150,10 @@ class PulseRepository(
         return true
     }
 
+    /** Settings' data check: what Health Connect holds per type over the last week, and who writes it. */
+    suspend fun checkData(): List<com.pandyabhavik.pulse.health.TypeCheck> =
+        runCatching { health.check(clock().instant()) }.getOrElse { emptyList() }
+
     /** Set by [read] when a full history read is due; [backfill] does it. */
     @Volatile private var pendingBackfill: String? = null
     private val backfillLock = Mutex()

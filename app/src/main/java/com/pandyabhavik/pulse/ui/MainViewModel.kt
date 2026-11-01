@@ -86,4 +86,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setDashboard(tiles: List<String>) {
         viewModelScope.launch { repo.setDashboard(tiles) }
     }
+
+    private val _checks = MutableStateFlow<List<com.pandyabhavik.pulse.health.TypeCheck>?>(null)
+    /** The last data check (null until one ran). */
+    val checks: StateFlow<List<com.pandyabhavik.pulse.health.TypeCheck>?> = _checks.asStateFlow()
+    private val _checking = MutableStateFlow(false)
+    val checking: StateFlow<Boolean> = _checking.asStateFlow()
+
+    fun checkData() {
+        if (_checking.value) return
+        viewModelScope.launch {
+            _checking.value = true
+            try {
+                _checks.value = withTimeoutOrNull(30_000) { repo.checkData() } ?: emptyList()
+            } finally {
+                _checking.value = false
+            }
+        }
+    }
 }

@@ -19,4 +19,18 @@ interface HealthSource {
     val permissions: Set<String>
     /** What the last [readDays] couldn't read ("Heart rate: rate limited"), empty when everything came back. */
     val problems: List<String> get() = emptyList()
+
+    /** One line per data type for Settings' data check: is it allowed, is anything there, who writes it. */
+    suspend fun check(now: java.time.Instant): List<TypeCheck> = emptyList()
 }
+
+/** What Health Connect holds for one data type over the last 7 days. */
+data class TypeCheck(
+    val name: String,
+    val allowed: Boolean,
+    val records: Int,
+    /** The apps that wrote it (app names where the phone knows them). */
+    val sources: List<String>,
+    val latest: java.time.Instant?,
+    val error: String? = null,
+)

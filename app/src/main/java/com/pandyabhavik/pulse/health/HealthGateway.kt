@@ -90,6 +90,56 @@ class HealthGateway(private val context: Context) : HealthSource {
         empty
     }
 
+    override suspend fun check(now: Instant): List<TypeCheck> {
+        if (status() != HealthStatus.AVAILABLE) return emptyList()
+        val granted = granted()
+        val range = TimeRangeFilter.between(now.minus(Duration.ofDays(7)), now)
+        val pm = context.packageManager
+        fun label(pkg: String): String = runCatching {
+            pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+        }.getOrDefault(pkg)
+        fun timeOf(r: Record): Instant? = when (r) {
+            is androidx.health.connect.client.records.IntervalRecord -> r.endTime
+            is androidx.health.connect.client.records.InstantaneousRecord -> r.time
+            else -> null
+        }
+        val types: List<Triple<String, String, KClass<out Record>>> = listOf(
+            Triple("Steps", READ_STEPS, StepsRecord::class),
+            Triple("Calories burned", READ_TOTAL_CALORIES, TotalCaloriesBurnedRecord::class),
+            Triple("Active calories", READ_ACTIVE_CALORIES, ActiveCaloriesBurnedRecord::class),
+            Triple("Food", READ_NUTRITION, NutritionRecord::class),
+            Triple("Weight", READ_WEIGHT, WeightRecord::class),
+            Triple("Sleep", READ_SLEEP, SleepSessionRecord::class),
+            Triple("Heart rate", READ_HEART_RATE, HeartRateRecord::class),
+            Triple("Resting heart rate", READ_RESTING_HEART_RATE, RestingHeartRateRecord::class),
+            Triple("Distance", READ_DISTANCE, DistanceRecord::class),
+            Triple("Floors", READ_FLOORS, FloorsClimbedRecord::class),
+            Triple("Exercise", READ_EXERCISE, ExerciseSessionRecord::class),
+            Triple("Water", READ_HYDRATION, HydrationRecord::class),
+            Triple("Body fat", READ_BODY_FAT, BodyFatRecord::class),
+            Triple("Lean mass", READ_LEAN_MASS, LeanBodyMassRecord::class),
+            Triple("HRV", READ_HRV, HeartRateVariabilityRmssdRecord::class),
+            Triple("Blood oxygen", READ_SPO2, OxygenSaturationRecord::class),
+            Triple("Breathing rate", READ_BREATHING, RespiratoryRateRecord::class),
+            Triple("VO2 max", READ_VO2_MAX, Vo2MaxRecord::class),
+        )
+        return types.map { (name, perm, type) ->
+            if (perm !in granted) return@map TypeCheck(name, false, 0, emptyList(), null)
+            try {
+                val recs = client.readRecords(ReadRecordsRequest(type, range, pageSize = 1000)).records
+                TypeCheck(
+                    name, true, recs.size,
+                    recs.map { it.metadata.dataOrigin.packageName }.distinct().map(::label),
+                    recs.mapNotNull(::timeOf).maxOrNull(),
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                TypeCheck(name, true, 0, emptyList(), null, e.message ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
     override suspend fun readDays(from: LocalDate, to: LocalDate, zone: ZoneId): List<DayLog> {
         if (status() != HealthStatus.AVAILABLE || to.isBefore(from)) return emptyList()
         val granted = granted()

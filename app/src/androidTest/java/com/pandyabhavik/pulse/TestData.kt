@@ -104,6 +104,16 @@ class FakeHealthSource : HealthSource {
         return days.filter { !it.date.isBefore(from) && !it.date.isAfter(to) }.sortedBy { it.date }
     }
 
+    override suspend fun check(now: java.time.Instant): List<com.pandyabhavik.pulse.health.TypeCheck> {
+        val week = days.filter { !it.date.isBefore(TestData.NOW.toLocalDate().minusDays(6)) }
+        return listOf(
+            com.pandyabhavik.pulse.health.TypeCheck("Steps", true, week.count { it.steps != null }, listOf("Fitbit"), now),
+            com.pandyabhavik.pulse.health.TypeCheck("Food", true, week.count { it.eaten != null }, listOf("MyFitnessPal"), now),
+            com.pandyabhavik.pulse.health.TypeCheck("Weight", HealthGateway.READ_WEIGHT in grantedNow, week.count { it.weightKg != null }, listOf("VeSync"), now),
+            com.pandyabhavik.pulse.health.TypeCheck("VO2 max", true, 0, emptyList(), null),
+        )
+    }
+
     override fun installIntent(): Intent =
         Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${HealthGateway.PROVIDER}"))
 

@@ -220,6 +220,9 @@ fun SettingsScreen(s: HomeState) {
                 TextLink("Physical activity permission") { ui.askActivity() }
             }
 
+            // ---- Data check: what Health Connect actually holds, per type, and which app writes it.
+            DataCheckCard()
+
             // ---- Privacy
             PCard {
                 Lbl("Privacy", Icons.Rounded.Lock, C.steps)
@@ -287,4 +290,50 @@ private fun TextLink(text: String, onClick: () -> Unit) {
             .clickable { onClick() }
             .padding(vertical = 6.dp),
     )
+}
+
+/** Runs a check of every Health Connect type over the last 7 days and lists what came back. */
+@Composable
+private fun DataCheckCard() {
+    val ui = LocalUi.current
+    val checks by ui.vm.checks.collectAsStateWithLifecycle()
+    val checking by ui.vm.checking.collectAsStateWithLifecycle()
+    PCard(Modifier.testTag("data_check")) {
+        Lbl("Data check", Icons.Rounded.Favorite, C.under)
+        Text(
+            "Shows what Health Connect has for each kind of data over the last 7 days, and which app wrote it.",
+            style = T.small.copy(fontSize = 13.sp),
+            modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
+        )
+        PButton(
+            if (checking) "Checking…" else "Check my data",
+            Modifier.testTag("data_check_run"),
+            brush = Brush.linearGradient(listOf(C.s2, C.s2)),
+            textColor = C.ink,
+            height = 44.dp,
+        ) { ui.vm.checkData() }
+        val list = checks
+        if (list != null) {
+            Spacer(Modifier.height(6.dp))
+            if (list.isEmpty()) Text("Couldn't reach Health Connect.", style = T.small.copy(color = C.over), modifier = Modifier.padding(top = 6.dp))
+            list.forEachIndexed { i, c ->
+                val (value, color) = when {
+                    !c.allowed -> "Not allowed" to C.over
+                    c.error != null -> "Error: ${c.error}" to C.over
+                    c.records == 0 -> "Nothing in 7 days" to C.food
+                    else -> "${c.records}${if (c.records >= 1000) "+" else ""} · ${c.sources.joinToString()}" to C.under
+                }
+                Column(Modifier.fillMaxWidth().padding(vertical = 7.dp).testTag("data_check_${i}")) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(c.name, style = T.body.copy(color = C.ink, fontSize = 14.sp), modifier = Modifier.weight(1f))
+                        c.latest?.let { t ->
+                            Text(F.syncAgo(t, java.time.ZonedDateTime.now()).removePrefix("Fitbit · "), style = T.small)
+                        }
+                    }
+                    Text(value, style = T.small.copy(fontSize = 13.sp, color = color))
+                }
+                if (i < list.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(C.line))
+            }
+        }
+    }
 }
