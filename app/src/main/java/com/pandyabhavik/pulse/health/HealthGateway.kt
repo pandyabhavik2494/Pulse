@@ -8,6 +8,15 @@ import androidx.health.connect.client.aggregate.AggregateMetric
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.BodyFatRecord
+import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.FloorsClimbedRecord
+import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
+import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.LeanBodyMassRecord
+import androidx.health.connect.client.records.OxygenSaturationRecord
+import androidx.health.connect.client.records.RespiratoryRateRecord
+import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.MealType
 import androidx.health.connect.client.records.NutritionRecord
@@ -24,6 +33,8 @@ import com.pandyabhavik.pulse.core.DayLog
 import com.pandyabhavik.pulse.core.Meals
 import com.pandyabhavik.pulse.data.HealthStatus
 import java.time.Duration
+import java.time.Instant
+import java.time.ZoneOffset
 import java.time.LocalDate
 import java.time.Period
 import java.time.ZoneId
@@ -106,6 +117,15 @@ class HealthGateway(private val context: Context) : HealthSource {
         val distance = if (READ_DISTANCE in granted) part("Distance", none, failed) {
             daily(DistanceRecord.DISTANCE_TOTAL, from, to).mapValues { it.value.inMeters.roundToInt() }
         } else none
+        val floors = if (READ_FLOORS in granted) part("Floors", none, failed) {
+            daily(FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL, from, to).mapValues { it.value.roundToInt() }
+        } else none
+        val exercise = if (READ_EXERCISE in granted) part("Exercise", none, failed) {
+            daily(ExerciseSessionRecord.EXERCISE_DURATION_TOTAL, from, to).mapValues { it.value.toMinutes().toInt() }
+        } else none
+        val water = if (READ_HYDRATION in granted) part("Water", none, failed) {
+            daily(HydrationRecord.VOLUME_TOTAL, from, to).mapValues { it.value.inMilliliters.roundToInt() }
+        } else none
         val hrAvg = if (READ_HEART_RATE in granted) part("Heart rate", none, failed) {
             daily(HeartRateRecord.BPM_AVG, from, to).mapValues { it.value.toInt() }
         } else none
@@ -146,19 +166,49 @@ class HealthGateway(private val context: Context) : HealthSource {
                 }
         }
 
+        // Body composition and vitals: one value per day (the latest for the scale, the average for vitals).
+        val noneD = emptyMap<LocalDate, Double>()
+        val bodyFat = if (READ_BODY_FAT in granted) part("Body fat", noneD, failed) {
+            perDay(readAll(BodyFatRecord::class, range), zone, from, to, latest = true, { it.time }, { it.zoneOffset }) { it.percentage.value }
+        } else noneD
+        val lean = if (READ_LEAN_MASS in granted) part("Lean mass", noneD, failed) {
+            perDay(readAll(LeanBodyMassRecord::class, range), zone, from, to, latest = true, { it.time }, { it.zoneOffset }) { it.mass.inKilograms }
+        } else noneD
+        val hrv = if (READ_HRV in granted) part("HRV", noneD, failed) {
+            perDay(readAll(HeartRateVariabilityRmssdRecord::class, range), zone, from, to, latest = false, { it.time }, { it.zoneOffset }) { it.heartRateVariabilityMillis }
+        } else noneD
+        val spo2 = if (READ_SPO2 in granted) part("Blood oxygen", noneD, failed) {
+            perDay(readAll(OxygenSaturationRecord::class, range), zone, from, to, latest = false, { it.time }, { it.zoneOffset }) { it.percentage.value }
+        } else noneD
+        val breathing = if (READ_BREATHING in granted) part("Breathing rate", noneD, failed) {
+            perDay(readAll(RespiratoryRateRecord::class, range), zone, from, to, latest = false, { it.time }, { it.zoneOffset }) { it.rate }
+        } else noneD
+        val vo2 = if (READ_VO2_MAX in granted) part("VO2 max", noneD, failed) {
+            perDay(readAll(Vo2MaxRecord::class, range), zone, from, to, latest = true, { it.time }, { it.zoneOffset }) { it.vo2MillilitersPerMinuteKilogram }
+        } else noneD
+
         // Sleep: a night counts on the day it ends (Monday night's sleep is Tuesday's), so read from the
         // day before [from]. Awake and out-of-bed stages don't count as sleep.
         val sleep = HashMap<LocalDate, Int>()
+        val stages = HashMap<LocalDate, IntArray>() // deep, REM, light, awake (minutes)
+        val longest = HashMap<LocalDate, SleepSessionRecord>()
         if (READ_SLEEP in granted) part("Sleep", Unit, failed) {
             val sleepRange = TimeRangeFilter.between(from.minusDays(1).atStartOfDay(zone).toInstant(), end)
             readAll(SleepSessionRecord::class, sleepRange).forEach { r ->
                 val date = r.endTime.atZone(r.endZoneOffset ?: zone).toLocalDate()
                 if (date.isBefore(from) || date.isAfter(to)) return@forEach
-                val awake = r.stages
-                    .filter { it.stage == SleepSessionRecord.STAGE_TYPE_AWAKE || it.stage == SleepSessionRecord.STAGE_TYPE_OUT_OF_BED }
-                    .sumOf { Duration.between(it.startTime, it.endTime).toMinutes() }
+                fun mins(vararg types: Int) = r.stages.filter { it.stage in types }
+                    .sumOf { Duration.between(it.startTime, it.endTime).toMinutes() }.toInt()
+                val awake = mins(SleepSessionRecord.STAGE_TYPE_AWAKE, SleepSessionRecord.STAGE_TYPE_OUT_OF_BED)
                 val minutes = (Duration.between(r.startTime, r.endTime).toMinutes() - awake).coerceAtLeast(0)
                 sleep[date] = (sleep[date] ?: 0) + minutes.toInt()
+                val st = stages.getOrPut(date) { IntArray(4) }
+                st[0] += mins(SleepSessionRecord.STAGE_TYPE_DEEP)
+                st[1] += mins(SleepSessionRecord.STAGE_TYPE_REM)
+                st[2] += mins(SleepSessionRecord.STAGE_TYPE_LIGHT)
+                st[3] += awake
+                val prev = longest[date]
+                if (prev == null || Duration.between(r.startTime, r.endTime) > Duration.between(prev.startTime, prev.endTime)) longest[date] = r
             }
         }
 
@@ -181,6 +231,26 @@ class HealthGateway(private val context: Context) : HealthSource {
                 hrMin = hrMin[d],
                 hrMax = hrMax[d],
                 distanceM = distance[d],
+                carbsG = f?.carbs?.roundToInt(),
+                fatG = f?.fat?.roundToInt(),
+                fiberG = f?.fiber?.roundToInt(),
+                sugarG = f?.sugar?.roundToInt(),
+                sodiumMg = f?.sodium?.roundToInt(),
+                waterMl = water[d],
+                floors = floors[d],
+                exerciseMin = exercise[d],
+                bodyFatPct = bodyFat[d],
+                leanKg = lean[d],
+                hrvMs = hrv[d]?.roundToInt(),
+                spo2Pct = spo2[d],
+                breathingRate = breathing[d],
+                vo2Max = vo2[d],
+                sleepDeepMin = stages[d]?.get(0)?.takeIf { it > 0 },
+                sleepRemMin = stages[d]?.get(1)?.takeIf { it > 0 },
+                sleepLightMin = stages[d]?.get(2)?.takeIf { it > 0 },
+                sleepAwakeMin = stages[d]?.let { if (it[0] + it[1] + it[2] > 0) it[3] else null },
+                bedTime = longest[d]?.let { clock(it.startTime, it.startZoneOffset, zone) },
+                wakeTime = longest[d]?.let { clock(it.endTime, it.endZoneOffset, zone) },
             )
             // Dates with nothing at all are left out; the repository treats a missing date as "no data".
             if (log != DayLog(d)) out += log
@@ -206,6 +276,27 @@ class HealthGateway(private val context: Context) : HealthSource {
         return out
     }
 
+    /** "23:41" for [t] in the record's own offset (or [zone]). */
+    private fun clock(t: Instant, offset: ZoneOffset?, zone: ZoneId): String {
+        val lt = t.atZone(offset ?: zone).toLocalTime()
+        return String.format(java.util.Locale.US, "%02d:%02d", lt.hour, lt.minute)
+    }
+
+    /** One value per day from point-in-time records: the latest of the day, or the day's average. */
+    private fun <T> perDay(
+        records: List<T>,
+        zone: ZoneId,
+        from: LocalDate,
+        to: LocalDate,
+        latest: Boolean,
+        time: (T) -> Instant,
+        offset: (T) -> ZoneOffset?,
+        value: (T) -> Double,
+    ): Map<LocalDate, Double> = records
+        .groupBy { time(it).atZone(offset(it) ?: zone).toLocalDate() }
+        .filterKeys { !it.isBefore(from) && !it.isAfter(to) }
+        .mapValues { (_, rs) -> if (latest) value(rs.maxBy(time)) else rs.map(value).average() }
+
     private suspend fun <T : Record> readAll(type: KClass<T>, range: TimeRangeFilter): List<T> {
         val out = ArrayList<T>()
         var token: String? = null
@@ -223,6 +314,14 @@ class HealthGateway(private val context: Context) : HealthSource {
         var protein = 0.0
         var hasProtein = false
         val perMeal = DoubleArray(4)
+        // Carbs, fat, fibre, sugar (g) and sodium (mg); null until some entry carries it.
+        var carbs: Double? = null
+        var fat: Double? = null
+        var fiber: Double? = null
+        var sugar: Double? = null
+        var sodium: Double? = null
+
+        private fun plus(a: Double?, b: Double?): Double? = if (b == null) a else (a ?: 0.0) + b
 
         fun add(r: NutritionRecord) {
             val e = r.energy?.inKilocalories ?: 0.0
@@ -231,6 +330,11 @@ class HealthGateway(private val context: Context) : HealthSource {
                 protein += it.inGrams
                 hasProtein = true
             }
+            carbs = plus(carbs, r.totalCarbohydrate?.inGrams)
+            fat = plus(fat, r.totalFat?.inGrams)
+            fiber = plus(fiber, r.dietaryFiber?.inGrams)
+            sugar = plus(sugar, r.sugar?.inGrams)
+            sodium = plus(sodium, r.sodium?.inMilligrams)
             val slot = when (r.mealType) {
                 MealType.MEAL_TYPE_BREAKFAST -> 0
                 MealType.MEAL_TYPE_LUNCH -> 1
@@ -259,6 +363,15 @@ class HealthGateway(private val context: Context) : HealthSource {
         val READ_WEIGHT = HealthPermission.getReadPermission(WeightRecord::class)
         val READ_SLEEP = HealthPermission.getReadPermission(SleepSessionRecord::class)
         val READ_DISTANCE = HealthPermission.getReadPermission(DistanceRecord::class)
+        val READ_FLOORS = HealthPermission.getReadPermission(FloorsClimbedRecord::class)
+        val READ_EXERCISE = HealthPermission.getReadPermission(ExerciseSessionRecord::class)
+        val READ_HYDRATION = HealthPermission.getReadPermission(HydrationRecord::class)
+        val READ_BODY_FAT = HealthPermission.getReadPermission(BodyFatRecord::class)
+        val READ_LEAN_MASS = HealthPermission.getReadPermission(LeanBodyMassRecord::class)
+        val READ_HRV = HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class)
+        val READ_SPO2 = HealthPermission.getReadPermission(OxygenSaturationRecord::class)
+        val READ_BREATHING = HealthPermission.getReadPermission(RespiratoryRateRecord::class)
+        val READ_VO2_MAX = HealthPermission.getReadPermission(Vo2MaxRecord::class)
         val READ_HEART_RATE = HealthPermission.getReadPermission(HeartRateRecord::class)
         val READ_RESTING_HEART_RATE = HealthPermission.getReadPermission(RestingHeartRateRecord::class)
         const val READ_IN_BACKGROUND = "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
@@ -266,7 +379,8 @@ class HealthGateway(private val context: Context) : HealthSource {
         /** The data types. Background reading is asked for too, but isn't needed to sync in the app. */
         val DATA = setOf(
             READ_STEPS, READ_TOTAL_CALORIES, READ_ACTIVE_CALORIES, READ_NUTRITION, READ_WEIGHT, READ_SLEEP,
-            READ_HEART_RATE, READ_RESTING_HEART_RATE, READ_DISTANCE,
+            READ_HEART_RATE, READ_RESTING_HEART_RATE, READ_DISTANCE, READ_FLOORS, READ_EXERCISE, READ_HYDRATION,
+            READ_BODY_FAT, READ_LEAN_MASS, READ_HRV, READ_SPO2, READ_BREATHING, READ_VO2_MAX,
         )
         val ALL = DATA + READ_IN_BACKGROUND
     }

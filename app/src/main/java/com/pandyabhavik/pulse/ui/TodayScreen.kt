@@ -70,6 +70,11 @@ import com.pandyabhavik.pulse.core.WeeklyRecap
 import com.pandyabhavik.pulse.data.HealthStatus
 import com.pandyabhavik.pulse.data.HomeState
 import kotlin.math.abs
+import java.util.Locale
+import java.time.LocalDate
+import com.pandyabhavik.pulse.core.DayLog
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.rounded.Circle
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.RowScope
@@ -114,8 +119,8 @@ private fun TodayCover(s: HomeState, openSheet: () -> Unit) {
         s.recap?.let { RecapCard(it, s.recapCommitted) }
         HealthWarning(s)
         CaloriesSection(s, openSheet)
-        StepsSection(s)
-        WeightSection(s)
+        ActivitySection(s)
+        BodySection(s)
         HeartSection(s)
         SleepSection(s)
     }
@@ -138,7 +143,7 @@ private fun TodayInner(s: HomeState, openSheet: () -> Unit) {
             ) {
                 HealthWarning(s)
                 CaloriesSection(s, openSheet)
-                StepsSection(s)
+                ActivitySection(s)
                 HeartSection(s)
             }
             Column(
@@ -149,7 +154,7 @@ private fun TodayInner(s: HomeState, openSheet: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 s.recap?.let { RecapCard(it, s.recapCommitted) }
-                WeightSection(s)
+                BodySection(s)
                 SleepSection(s)
             }
         }
@@ -446,11 +451,54 @@ private fun EmptyLine(title: String, detail: String, titleTag: String? = null) {
 /** Mean of the non-null values, rounded, or null when there are none. */
 private fun List<Int?>.avgOrNull(): Int? = filterNotNull().takeIf { it.isNotEmpty() }?.average()?.roundToInt()
 
+/** The newest value of [pick] in the last week (today first), with its date; null if none. */
+private fun <T> latest(s: HomeState, pick: (DayLog) -> T?): Pair<T, LocalDate>? =
+    s.history.take(7).firstNotNullOfOrNull { d -> pick(d)?.let { it to d.date } }
+
+/** "today", or the date it's from, for a value that may be a few days old. */
+private fun whenText(date: LocalDate, today: LocalDate): String? = if (date == today) null else "(${F.date(date, today)})"
+
+private fun one(v: Double): String = String.format(Locale.US, "%.1f", v)
+
+/** A row shown only when there's a value from the last week; older-than-today values say their date. */
+@Composable
+private fun <T> RecentRow(s: HomeState, label: String, pick: (DayLog) -> T?, divider: Boolean = true, tag: String? = null, show: (T) -> String) {
+    val v = latest(s, pick) ?: return
+    FieldRow(
+        label,
+        show(v.first),
+        if (tag != null) Modifier.testTag(tag) else Modifier,
+        note = whenText(v.second, s.now.toLocalDate()),
+        divider = divider,
+    )
+}
+
+/** Three numbers side by side (carbs, fat, protein), each with its label under it. */
+@Composable
+private fun TripleStat(vararg items: Triple<String, String, Color>) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        for ((value, label, color) in items) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                    .background(C.s2)
+                    .padding(vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(value, style = T.metric.copy(fontSize = 19.sp, lineHeight = 22.sp, letterSpacing = 0.sp, color = color), maxLines = 1, softWrap = false)
+                Text(label, style = T.small, maxLines = 1)
+            }
+        }
+    }
+}
+
 @Composable
 private fun CaloriesSection(s: HomeState, onClick: () -> Unit) {
     val balance = s.balance
     val color = if (s.isOver) C.over else C.under
     val shown by animateIntAsState(abs(balance ?: 0), tween(700), label = "balance")
+    val d = s.today
     Section(
         "Calories", Icons.Rounded.LocalFireDepartment, C.under,
         Modifier.testTag("balance_ring"),
@@ -482,13 +530,26 @@ private fun CaloriesSection(s: HomeState, onClick: () -> Unit) {
             s.burned?.let { "${F.n(it)} kcal" } ?: "—",
             note = if (s.resting != null && s.active != null) "(${F.n(s.active)} active)" else null,
         )
-        val meals = F.meals(s.today).size
+        val meals = F.meals(d).size
         FieldRow(
             "Eaten",
             s.eaten?.let { "${F.n(it)} kcal" } ?: "nothing yet",
             valueColor = if (s.eaten == null) C.mute else C.ink,
             note = if (s.eaten != null && meals > 0) "($meals meal${if (meals == 1) "" else "s"})" else null,
+            divider = d.carbsG == null && d.fatG == null && d.proteinG == null,
         )
+        if (d.carbsG != null || d.fatG != null || d.proteinG != null) {
+            TripleStat(
+                Triple(d.carbsG?.let { "$it g" } ?: "—", "Carbs", C.food),
+                Triple(d.fatG?.let { "$it g" } ?: "—", "Fat", C.wt2),
+                Triple(d.proteinG?.let { "$it g" } ?: "—", "Protein", C.steps),
+            )
+            Box(Modifier.fillMaxWidth().height(1.dp).background(C.line))
+        }
+        d.fiberG?.let { FieldRow("Fibre", "$it g") }
+        d.sugarG?.let { FieldRow("Sugar", "$it g") }
+        d.sodiumMg?.let { FieldRow("Sodium", "${F.n(it)} mg") }
+        d.waterMl?.let { FieldRow("Water", if (it >= 1000) "${one(it / 1000.0)} L" else "$it ml", valueColor = C.steps) }
         val avg = s.avg7
         FieldRow(
             "7-day average",
@@ -514,38 +575,41 @@ private fun CaloriesSection(s: HomeState, onClick: () -> Unit) {
 }
 
 @Composable
-private fun StepsSection(s: HomeState) {
+private fun ActivitySection(s: HomeState) {
     val goal = s.profile?.stepGoal ?: 10_000
     val steps by animateIntAsState(s.liveSteps, tween(600), label = "steps")
+    val d = s.today
     Section(
-        "Steps", Icons.AutoMirrored.Rounded.DirectionsWalk, C.steps,
+        "Activity", Icons.AutoMirrored.Rounded.DirectionsWalk, C.steps,
         trailing = { if (s.liveActive) LivePill() },
     ) {
-        BigValue(F.n(steps), "of ${F.n(goal)}", C.ink, "steps_value")
+        BigValue(F.n(steps), "steps of ${F.n(goal)}", C.ink, "steps_value")
         GlowBar(s.liveSteps.toFloat() / goal.coerceAtLeast(1), listOf(C.steps), height = 8.dp, glow = false)
         Spacer(Modifier.height(4.dp))
         val left = goal - s.liveSteps
-        FieldRow("To go", if (left > 0) F.n(left) else "Goal done", valueColor = if (left > 0) C.ink else C.under)
-        val metres = s.today.distanceM
+        FieldRow("To go", if (left > 0) "${F.n(left)} steps" else "Goal done", valueColor = if (left > 0) C.ink else C.under)
         FieldRow(
             "Distance",
-            metres?.let { String.format(java.util.Locale.US, "%.2f mi", it / 1609.344) } ?: "—",
+            d.distanceM?.let { String.format(Locale.US, "%.2f mi", it / 1609.344) } ?: "—",
             Modifier.testTag("distance_value"),
-            valueColor = if (metres == null) C.mute else C.ink,
-            note = metres?.let { String.format(java.util.Locale.US, "(%.1f km)", it / 1000.0) },
+            valueColor = if (d.distanceM == null) C.mute else C.ink,
+            note = d.distanceM?.let { String.format(Locale.US, "(%.1f km)", it / 1000.0) },
         )
+        d.floors?.let { FieldRow("Floors climbed", "$it") }
+        d.exerciseMin?.let { FieldRow("Exercise", "${it / 60}h ${it % 60}m".removePrefix("0h ")) }
+        s.active?.let { FieldRow("Active calories", "${F.n(it)} kcal") }
         val avg = s.history.drop(1).take(7).map { it.steps }.avgOrNull()
-        FieldRow("7-day average", avg?.let { F.n(it) } ?: "—", valueColor = if (avg == null) C.mute else C.ink, divider = false)
+        FieldRow("7-day average", avg?.let { "${F.n(it)} steps" } ?: "—", valueColor = if (avg == null) C.mute else C.ink, divider = false)
     }
 }
 
 @Composable
-private fun WeightSection(s: HomeState) {
+private fun BodySection(s: HomeState) {
     val p = s.profile ?: return
     val kg = s.trendKg
     val today = s.now.toLocalDate()
     val lastWeighIn = s.history.firstOrNull { it.weightKg != null }
-    Section("Weight", Icons.Rounded.MonitorWeight, C.wt) {
+    Section("Body", Icons.Rounded.MonitorWeight, C.wt) {
         if (kg == null) {
             EmptyLine("No weigh-in yet", "Step on your VeSync scale. Pulse uses a smoothed trend, so one heavy morning doesn't count.")
         } else {
@@ -568,8 +632,15 @@ private fun WeightSection(s: HomeState) {
             "Last weigh-in",
             lastWeighIn?.let { "${F.kg(it.weightKg!!)} kg" } ?: "—",
             valueColor = if (lastWeighIn == null) C.mute else C.ink,
-            note = lastWeighIn?.let { if (it.date == today) "today" else F.date(it.date, today) },
+            note = lastWeighIn?.let { if (it.date == today) "(today)" else "(${F.date(it.date, today)})" },
         )
+        val bmiKg = kg ?: lastWeighIn?.weightKg
+        if (bmiKg != null && p.heightCm > 0) {
+            val m = p.heightCm / 100.0
+            FieldRow("BMI", one(bmiKg / (m * m)))
+        }
+        RecentRow(s, "Body fat", { it.bodyFatPct }) { "${one(it)}%" }
+        RecentRow(s, "Lean mass", { it.leanKg }) { "${one(it)} kg" }
         val f = s.forecast
         val next = f?.next
         FieldRow(
@@ -599,45 +670,83 @@ private fun HeartSection(s: HomeState) {
     val today = s.now.toLocalDate()
     // Fitbit works out resting heart rate after a night's data, so the latest one may be yesterday's.
     val resting = s.history.take(3).firstOrNull { it.restingHr != null }
-    val day = s.today
-    Section("Heart rate", Icons.Rounded.Favorite, C.over) {
-        if (resting == null && day.hrAvg == null) {
-            EmptyLine("No heart rate yet", "It appears here when your Fitbit syncs to Health Connect.")
+    val d = s.today
+    val anyVitals = latest(s) { it.hrvMs } != null || latest(s) { it.spo2Pct } != null ||
+        latest(s) { it.breathingRate } != null || latest(s) { it.vo2Max } != null
+    Section("Heart and vitals", Icons.Rounded.Favorite, C.over) {
+        if (resting == null && d.hrAvg == null && !anyVitals) {
+            EmptyLine("No heart data yet", "It appears here when your Fitbit syncs to Health Connect.")
             return@Section
         }
-        if (resting != null) {
-            BigValue("${resting.restingHr}", "bpm resting", C.ink, "heart_resting")
-        } else {
-            BigValue("${day.hrAvg}", "bpm average", C.ink, "heart_resting")
+        when {
+            resting != null -> BigValue("${resting.restingHr}", "bpm resting", C.ink, "heart_resting")
+            d.hrAvg != null -> BigValue("${d.hrAvg}", "bpm average", C.ink, "heart_resting")
         }
         if (resting != null && resting.date != today) {
             Text("from ${F.date(resting.date, today)}", style = T.small, modifier = Modifier.padding(bottom = 4.dp))
         }
         Spacer(Modifier.height(4.dp))
-        FieldRow("Today's average", day.hrAvg?.let { "$it bpm" } ?: "—", valueColor = if (day.hrAvg == null) C.mute else C.ink)
+        FieldRow("Average today", d.hrAvg?.let { "$it bpm" } ?: "—", valueColor = if (d.hrAvg == null) C.mute else C.ink)
         FieldRow(
-            "Today's range",
-            if (day.hrMin != null && day.hrMax != null) "${day.hrMin}–${day.hrMax} bpm" else "—",
-            valueColor = if (day.hrMin == null) C.mute else C.ink,
-            divider = false,
+            "Range today",
+            if (d.hrMin != null && d.hrMax != null) "${d.hrMin}–${d.hrMax} bpm" else "—",
+            valueColor = if (d.hrMin == null) C.mute else C.ink,
         )
+        RecentRow(s, "HRV", { it.hrvMs }) { "$it ms" }
+        RecentRow(s, "Blood oxygen", { it.spo2Pct }) { "${one(it)}%" }
+        RecentRow(s, "Breathing rate", { it.breathingRate }) { "${one(it)} /min" }
+        RecentRow(s, "VO2 max", { it.vo2Max }, divider = false) { one(it) }
     }
 }
 
 @Composable
 private fun SleepSection(s: HomeState) {
-    val night = s.today.sleepMinutes
+    val d = s.today
+    val night = d.sleepMinutes
     val avg = s.history.take(7).map { it.sleepMinutes }.avgOrNull()
     Section("Sleep", Icons.Rounded.Bedtime, C.sleep) {
         if (night == null) {
             EmptyLine("No sleep recorded last night", "Wear your Fitbit to bed and it shows here in the morning.")
         } else {
-            BigValue("${night / 60} h ${night % 60} m", "last night", C.ink, "sleep_value")
-            GlowBar(night / 480f, listOf(C.sleep), height = 8.dp, glow = false)
-            Spacer(Modifier.height(4.dp))
+            BigValue("${night / 60}h ${night % 60}m", "last night", C.ink, "sleep_value")
+            if (d.bedTime != null && d.wakeTime != null) {
+                Text("${d.bedTime} to ${d.wakeTime}", style = T.small.copy(fontSize = 13.sp), modifier = Modifier.padding(bottom = 8.dp))
+            }
+            val deep = d.sleepDeepMin ?: 0
+            val rem = d.sleepRemMin ?: 0
+            val light = d.sleepLightMin ?: 0
+            val awake = d.sleepAwakeMin ?: 0
+            if (deep + rem + light > 0) {
+                StageBar(listOf(deep to C.wt, rem to C.steps, light to C.sleep, awake to C.dim))
+                Spacer(Modifier.height(4.dp))
+                StageRow("Deep", deep, C.wt)
+                StageRow("REM", rem, C.steps)
+                StageRow("Light", light, C.sleep)
+                StageRow("Awake", awake, C.dim)
+            } else {
+                GlowBar(night / 480f, listOf(C.sleep), height = 8.dp, glow = false)
+                Spacer(Modifier.height(4.dp))
+            }
         }
         FieldRow("7-night average", avg?.let { F.sleep(it) } ?: "—", valueColor = if (avg == null) C.mute else C.ink, divider = false)
     }
+}
+
+/** Sleep stages as one bar split into coloured parts, in proportion. */
+@Composable
+private fun StageBar(parts: List<Pair<Int, Color>>) {
+    val total = parts.sumOf { it.first }.coerceAtLeast(1)
+    Row(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        for ((mins, color) in parts) {
+            if (mins <= 0) continue
+            Box(Modifier.weight(mins.toFloat() / total).fillMaxHeight().background(color))
+        }
+    }
+}
+
+@Composable
+private fun StageRow(label: String, minutes: Int, color: Color) {
+    FieldRow(label, F.sleep(minutes), leading = Icons.Rounded.Circle, leadingColor = color)
 }
 
 @Composable

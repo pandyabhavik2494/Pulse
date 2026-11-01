@@ -149,6 +149,27 @@ object TestData {
             hrMax = 118 + (i * 7) % 30,
             // About 0.76 m a stride.
             distanceM = steps * 76 / 100,
+            // Food details in proportion to the calories (roughly 45% carbs, 30% fat).
+            carbsG = eaten * 45 / 400,
+            fatG = eaten * 30 / 900,
+            fiberG = 18 + i % 9,
+            sugarG = 40 + (i * 3) % 25,
+            sodiumMg = 1900 + (i * 37) % 600,
+            waterMl = 1500 + (i * 125) % 1000,
+            floors = 4 + i % 7,
+            exerciseMin = if (steps > 9000) 35 + i % 20 else null,
+            bodyFatPct = kg * 0.34,
+            leanKg = kg * 0.66,
+            hrvMs = 28 + i % 8,
+            spo2Pct = 95.0 + (i % 4) * 0.5,
+            breathingRate = 15.0 + (i % 5) * 0.2,
+            vo2Max = 34.0 + i / 12,
+            sleepDeepMin = sleep * 15 / 100,
+            sleepRemMin = sleep * 21 / 100,
+            sleepLightMin = sleep - sleep * 15 / 100 - sleep * 21 / 100 - 24,
+            sleepAwakeMin = 24,
+            bedTime = "23:${10 + i % 40}",
+            wakeTime = ((23 * 60 + 10 + i % 40 + sleep + 24) % 1440).let { String.format(java.util.Locale.US, "%02d:%02d", it / 60, it % 60) },
         )
     }
 
@@ -194,7 +215,7 @@ object TestData {
     const val SAT_21_SLEEP = "6 h 40 m"
     /** 24 Nov: resting heart rate and last night's sleep (412 min). */
     const val RESTING_HR = 64
-    const val TODAY_SLEEP_SHORT = "6 h 52 m"
+    const val TODAY_SLEEP_SHORT = "6h 52m"
 
     /** The 24 days as Health Connect would give them on 24 Nov at 7:42 PM. */
     fun baseDays(): List<DayLog> = TABLE.map { it.log() }

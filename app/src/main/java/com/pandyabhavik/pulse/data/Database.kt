@@ -41,6 +41,26 @@ data class DayEntity(
     val hrMin: Int? = null,
     val hrMax: Int? = null,
     val distanceM: Int? = null,
+    val carbsG: Int? = null,
+    val fatG: Int? = null,
+    val fiberG: Int? = null,
+    val sugarG: Int? = null,
+    val sodiumMg: Int? = null,
+    val waterMl: Int? = null,
+    val floors: Int? = null,
+    val exerciseMin: Int? = null,
+    val bodyFatPct: Double? = null,
+    val leanKg: Double? = null,
+    val hrvMs: Int? = null,
+    val spo2Pct: Double? = null,
+    val breathingRate: Double? = null,
+    val vo2Max: Double? = null,
+    val sleepDeepMin: Int? = null,
+    val sleepRemMin: Int? = null,
+    val sleepLightMin: Int? = null,
+    val sleepAwakeMin: Int? = null,
+    val bedTime: String? = null,
+    val wakeTime: String? = null,
 ) {
     fun toDayLog() = DayLog(
         date = LocalDate.parse(date),
@@ -57,6 +77,26 @@ data class DayEntity(
         hrMin = hrMin,
         hrMax = hrMax,
         distanceM = distanceM,
+        carbsG = carbsG,
+        fatG = fatG,
+        fiberG = fiberG,
+        sugarG = sugarG,
+        sodiumMg = sodiumMg,
+        waterMl = waterMl,
+        floors = floors,
+        exerciseMin = exerciseMin,
+        bodyFatPct = bodyFatPct,
+        leanKg = leanKg,
+        hrvMs = hrvMs,
+        spo2Pct = spo2Pct,
+        breathingRate = breathingRate,
+        vo2Max = vo2Max,
+        sleepDeepMin = sleepDeepMin,
+        sleepRemMin = sleepRemMin,
+        sleepLightMin = sleepLightMin,
+        sleepAwakeMin = sleepAwakeMin,
+        bedTime = bedTime,
+        wakeTime = wakeTime,
     )
 }
 
@@ -78,6 +118,26 @@ fun DayLog.toEntity() = DayEntity(
     hrMin = hrMin,
     hrMax = hrMax,
     distanceM = distanceM,
+    carbsG = carbsG,
+    fatG = fatG,
+    fiberG = fiberG,
+    sugarG = sugarG,
+    sodiumMg = sodiumMg,
+    waterMl = waterMl,
+    floors = floors,
+    exerciseMin = exerciseMin,
+    bodyFatPct = bodyFatPct,
+    leanKg = leanKg,
+    hrvMs = hrvMs,
+    spo2Pct = spo2Pct,
+    breathingRate = breathingRate,
+    vo2Max = vo2Max,
+    sleepDeepMin = sleepDeepMin,
+    sleepRemMin = sleepRemMin,
+    sleepLightMin = sleepLightMin,
+    sleepAwakeMin = sleepAwakeMin,
+    bedTime = bedTime,
+    wakeTime = wakeTime,
 )
 
 @Dao
@@ -120,10 +180,33 @@ abstract class PulseDatabase : RoomDatabase() {
         fun create(context: Context, name: String = "pulse.db"): PulseDatabase =
             Room.databaseBuilder(context, PulseDatabase::class.java, name).addMigrations(V1_TO_V2).build()
 
-        /** Version 2 adds heart rate and distance. Old days keep their data; the new columns start empty. */
+        /** Version 2 adds heart rate, distance and the rest of Health Connect's data. Old days keep their data; the new columns start empty. */
         private val V1_TO_V2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                for (c in listOf("restingHr", "hrAvg", "hrMin", "hrMax", "distanceM")) db.execSQL("ALTER TABLE days ADD COLUMN $c INTEGER")
+                val columns = listOf(
+                    "restingHr" to "INTEGER", "hrAvg" to "INTEGER", "hrMin" to "INTEGER", "hrMax" to "INTEGER", "distanceM" to "INTEGER",
+                    "carbsG" to "INTEGER",
+                    "fatG" to "INTEGER",
+                    "fiberG" to "INTEGER",
+                    "sugarG" to "INTEGER",
+                    "sodiumMg" to "INTEGER",
+                    "waterMl" to "INTEGER",
+                    "floors" to "INTEGER",
+                    "exerciseMin" to "INTEGER",
+                    "bodyFatPct" to "REAL",
+                    "leanKg" to "REAL",
+                    "hrvMs" to "INTEGER",
+                    "spo2Pct" to "REAL",
+                    "breathingRate" to "REAL",
+                    "vo2Max" to "REAL",
+                    "sleepDeepMin" to "INTEGER",
+                    "sleepRemMin" to "INTEGER",
+                    "sleepLightMin" to "INTEGER",
+                    "sleepAwakeMin" to "INTEGER",
+                    "bedTime" to "TEXT",
+                    "wakeTime" to "TEXT",
+                )
+                for ((c, type) in columns) db.execSQL("ALTER TABLE days ADD COLUMN $c $type")
             }
         }
     }

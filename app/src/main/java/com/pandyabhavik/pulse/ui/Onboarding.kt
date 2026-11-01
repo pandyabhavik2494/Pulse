@@ -248,12 +248,12 @@ private fun ColumnScope.ConnectStep(
     Text("Connect your data", style = T.big.copy(fontSize = 30.sp, lineHeight = 33.sp))
     Text("Pulse reads from Health Connect. Nothing leaves your phone.", style = T.body)
     Column {
-        PermRow("Steps and distance · Fitbit", allowed("READ_STEPS", "READ_DISTANCE"))
+        PermRow("Steps, distance, floors, exercise · Fitbit", allowed("READ_STEPS", "READ_DISTANCE", "READ_FLOORS_CLIMBED", "READ_EXERCISE"))
         PermRow("Calories burned · Fitbit", allowed("READ_TOTAL_CALORIES_BURNED", "READ_ACTIVE_CALORIES_BURNED"))
-        PermRow("Food · MyFitnessPal", allowed("READ_NUTRITION"))
-        PermRow("Weight · scale", allowed("READ_WEIGHT"))
+        PermRow("Food and water · MyFitnessPal", allowed("READ_NUTRITION", "READ_HYDRATION"))
+        PermRow("Weight and body fat · scale", allowed("READ_WEIGHT", "READ_BODY_FAT", "READ_LEAN_BODY_MASS"))
         PermRow("Sleep · Fitbit", allowed("READ_SLEEP"))
-        PermRow("Heart rate · Fitbit", allowed("READ_HEART_RATE", "READ_RESTING_HEART_RATE"))
+        PermRow("Heart rate and vitals · Fitbit", allowed("READ_HEART_RATE", "READ_RESTING_HEART_RATE", "READ_HEART_RATE_VARIABILITY", "READ_OXYGEN_SATURATION", "READ_RESPIRATORY_RATE", "READ_VO2_MAX"))
         PermRow("Read in background", allowed("READ_HEALTH_DATA_IN_BACKGROUND"), divider = false)
     }
     val allHealth = hcOk && s.missingPermissions.isEmpty()

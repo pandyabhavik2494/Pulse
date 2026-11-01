@@ -50,6 +50,32 @@ data class DayLog(
     val hrMax: Int? = null,
     /** Distance walked or run, metres. */
     val distanceM: Int? = null,
+    /** Food details from MyFitnessPal: grams of carbs, fat, fibre and sugar, milligrams of sodium. */
+    val carbsG: Int? = null,
+    val fatG: Int? = null,
+    val fiberG: Int? = null,
+    val sugarG: Int? = null,
+    val sodiumMg: Int? = null,
+    /** Water logged, ml. */
+    val waterMl: Int? = null,
+    /** Floors climbed and minutes of logged exercise. */
+    val floors: Int? = null,
+    val exerciseMin: Int? = null,
+    /** From the scale: body fat % and lean mass, latest of the day. */
+    val bodyFatPct: Double? = null,
+    val leanKg: Double? = null,
+    /** Vitals: heart rate variability (RMSSD, ms), blood oxygen %, breaths a minute, VO2 max. */
+    val hrvMs: Int? = null,
+    val spo2Pct: Double? = null,
+    val breathingRate: Double? = null,
+    val vo2Max: Double? = null,
+    /** Last night's sleep stages in minutes, and bed and wake times ("23:41"). */
+    val sleepDeepMin: Int? = null,
+    val sleepRemMin: Int? = null,
+    val sleepLightMin: Int? = null,
+    val sleepAwakeMin: Int? = null,
+    val bedTime: String? = null,
+    val wakeTime: String? = null,
 ) {
     /** Burned minus eaten. Positive = under (deficit), negative = over (spill-over). Null if either side is missing. */
     val balance: Int? get() = if (burnedTotal != null && eaten != null) burnedTotal - eaten else null
