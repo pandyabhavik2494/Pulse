@@ -599,6 +599,13 @@ class AppDriver(val compose: ComposeTestRule) {
     // ---- Navigation --------------------------------------------------------------------------------
 
     /** "today", "journey", "history" or "settings": the bottom bar / rail item (settings: the top-right icon on the cover screen). */
+    /** Taps a Today section open (they start collapsed) unless [detail], a tag inside it, already shows. */
+    fun expand(section: String, detail: String) {
+        if (exists(detail)) return
+        click(section)
+        waitTag(detail)
+    }
+
     fun tab(key: String) {
         click("nav_$key")
         waitTag("${key}_screen")

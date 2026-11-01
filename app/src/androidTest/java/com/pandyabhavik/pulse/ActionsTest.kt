@@ -226,6 +226,7 @@ class ActionsTest {
         assertNotNull(nextAfter)
         assertTrue("the next milestone should come no later ($nextBefore -> $nextAfter)", nextBefore == null || !nextAfter!!.isAfter(nextBefore))
         assertNotEquals("the forecast should change", before.forecast, after.forecast)
+        app.expand("section_body", "next_milestone")
         nextAfter?.let { app.assertTagShows("next_milestone", F.date(it, today)) }
         shot("52-after-sync")
     }
@@ -242,7 +243,7 @@ class ActionsTest {
         val expected = Motivation.streak(TestData.daysFor(Scene.OVER_YESTERDAY), today)
         assertEquals(expected, s.streak)
         assertTrue("one over day mustn't reset the streak (was ${s.streak})", s.streak > 2)
-        app.waitTag("streak_chip")
+        app.expand("balance_ring", "streak_chip")
         app.assertTagShows("streak_chip", "${s.streak} days under in a row")
         app.assertNotClipped("streak_chip")
         shot("53-forgiving-streak")
