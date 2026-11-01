@@ -529,7 +529,7 @@ internal object Art {
             val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 this.style = Paint.Style.STROKE
                 strokeWidth = stroke
-                strokeCap = Paint.Cap.ROUND
+                strokeCap = Paint.Cap.BUTT
             }
             p.color = argb(WC.ringTrack)
             c.drawOval(oval, p)
@@ -548,9 +548,9 @@ internal object Art {
 
             if (overFrac <= 0f) {
                 val fe = eatenFrac.coerceIn(0f, 1f)
-                // A gap of 0.012 of the circle on each side of the glowing arc, as in the mock.
-                val gapStart = if (fe > 0.002f) fe + 0.012f else 0f
-                val gapLen = 1f - gapStart - (if (fe > 0.002f) 0.012f else 0f)
+                // A closed donut: eaten from 12 o'clock, the rest glowing round to meet it. No gaps, flat ends.
+                val gapStart = fe
+                val gapLen = 1f - fe
                 val colors = ringColors(style)
                 val glow = Paint(p).apply {
                     maskFilter = blur
@@ -562,7 +562,7 @@ internal object Art {
                     solid.color = argb(colors[0])
                 } else {
                     // A closed ring (nothing eaten yet) wraps its colours round to the first, so no seam shows.
-                    val wrapped = if (fe <= 0.002f) colors + colors.first() else colors
+                    val wrapped = colors + colors.first()
                     val sweep = SweepGradient(cx, cx, wrapped.map { argb(it) }.toIntArray(), null)
                     sweep.setLocalMatrix(Matrix().apply { setRotate(-90f, cx, cx) })
                     glow.shader = sweep

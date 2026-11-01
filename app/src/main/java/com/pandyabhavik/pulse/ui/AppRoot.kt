@@ -121,11 +121,15 @@ fun AppRoot(
     }
 }
 
-/** A breathing ring while the first state is computed (a moment after launch). */
+/** Pulse's icon (the closed ring and heartbeat) while the first state is computed, a moment after launch. */
 @Composable
 private fun Loading() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        BalanceRing(burned = 2000, eaten = 1300, style = com.pandyabhavik.pulse.core.RingStyle.MINT, size = 120.dp)
+        androidx.compose.foundation.Image(
+            androidx.compose.ui.res.painterResource(com.pandyabhavik.pulse.R.drawable.ic_launcher_foreground),
+            contentDescription = "Pulse",
+            modifier = Modifier.size(160.dp),
+        )
     }
 }
 

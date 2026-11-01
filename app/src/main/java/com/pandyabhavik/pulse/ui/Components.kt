@@ -414,47 +414,24 @@ fun BalanceRing(
             val sw = box * 0.074f
             val r = box / 2f - sw / 2f - box * 0.02f
             oval.set(cx - r, cy - r, cx + r, cy + r)
-            val circ = (2 * Math.PI * r).toFloat()
-            val capFrac = (sw / 2f) / circ // round caps poke out by half a stroke: start arcs inside it
             drawIntoCanvas { cv ->
                 val nc = cv.nativeCanvas
                 track.color = C.track.toArgb()
                 track.strokeWidth = sw
                 nc.drawCircle(cx, cy, r, track)
                 if (!hasData) return@drawIntoCanvas
-
-                // The eaten part: a silver sweep from 12 o'clock.
-                val silver = SweepGradient(cx, cy, intArrayOf(0xFFE8EAF2.toInt(), 0xFF9AA1B5.toInt(), 0xFFE8EAF2.toInt()), null)
-                val m = android.graphics.Matrix().apply { setRotate(-90f, cx, cy) }
-                silver.setLocalMatrix(m)
-                arc.shader = silver
+                // A closed donut: eaten (silver) from 12 o'clock, then what's left (glowing colour) all the way
+                // round to meet it. Flat ends and no gaps, so it never reads as an open horseshoe.
+                arc.strokeCap = Paint.Cap.BUTT
+                glow.strokeCap = Paint.Cap.BUTT
                 arc.strokeWidth = sw
-                arc.alpha = 255
-                if (fe >= 0.999f) {
-                    arc.strokeCap = Paint.Cap.BUTT
-                    nc.drawArc(oval, -90f, 360f, false, arc)
-                    arc.strokeCap = Paint.Cap.ROUND
-                } else if (fe > 0.002f) {
-                    val s = (fe - 2 * capFrac).coerceAtLeast(0.001f)
-                    nc.drawArc(oval, -90f + capFrac * 360f, s * 360f, false, arc)
-                }
-                arc.shader = null
+                val m = android.graphics.Matrix().apply { setRotate(-90f, cx, cy) }
 
-                // The unspent gap: the deficit, glowing.
-                if (fg > 0.01f) {
-                    // Nothing eaten yet: the whole budget is still open, so the ring is one closed glowing
-                    // circle (no cap gap at the top, which read as a horseshoe). The colours wrap round to
-                    // the first so the seam doesn't show.
-                    val closed = fe <= 0.002f && fg >= 0.995f
-                    val gapStartFrac = if (closed) 0f else fe + 0.012f + capFrac
-                    val gapLen = if (closed) 1f else (fg - 0.024f - 2 * capFrac).coerceAtLeast(0.001f)
-                    val start = -90f + gapStartFrac * 360f
-                    val sweep = gapLen * 360f
-                    val colours = if (closed) gapColors + gapColors.first() else gapColors
-                    val shader = SweepGradient(cx, cy, colours.map { it.toArgb() }.toIntArray(), null)
-                    val cap = if (closed) Paint.Cap.BUTT else Paint.Cap.ROUND
-                    glow.strokeCap = cap
-                    arc.strokeCap = cap
+                // What's left: the deficit, glowing.
+                if (fg > 0.002f) {
+                    val start = -90f + fe * 360f
+                    val sweep = (1f - fe) * 360f
+                    val shader = SweepGradient(cx, cy, (gapColors + gapColors.first()).map { it.toArgb() }.toIntArray(), null)
                     shader.setLocalMatrix(m)
                     glow.shader = shader
                     glow.strokeWidth = sw * 1.15f
@@ -462,10 +439,20 @@ fun BalanceRing(
                     glow.maskFilter = BlurMaskFilter(sw * 0.75f, BlurMaskFilter.Blur.NORMAL)
                     nc.drawArc(oval, start, sweep, false, glow)
                     arc.shader = shader
+                    arc.alpha = 255
                     nc.drawArc(oval, start, sweep, false, arc)
                     arc.shader = null
-                    glow.strokeCap = Paint.Cap.ROUND
-                    arc.strokeCap = Paint.Cap.ROUND
+                }
+
+                // The eaten part: a silver sweep from 12 o'clock.
+                if (fe > 0.002f) {
+                    val silver = SweepGradient(cx, cy, intArrayOf(0xFFE8EAF2.toInt(), 0xFF9AA1B5.toInt(), 0xFFE8EAF2.toInt()), null)
+                    silver.setLocalMatrix(m)
+                    arc.shader = silver
+                    arc.strokeWidth = sw
+                    arc.alpha = 255
+                    nc.drawArc(oval, -90f, fe.coerceAtMost(1f) * 360f, false, arc)
+                    arc.shader = null
                 }
 
                 // Over: the overflow wraps round in red, glowing.
@@ -476,9 +463,9 @@ fun BalanceRing(
                     glow.alpha = 215
                     glow.strokeWidth = sw * 1.15f
                     glow.maskFilter = BlurMaskFilter(sw * 0.75f, BlurMaskFilter.Blur.NORMAL)
-                    nc.drawArc(oval, -90f + capFrac * 360f, sweep, false, glow)
+                    nc.drawArc(oval, -90f, sweep, false, glow)
                     arc.color = C.over.toArgb()
-                    nc.drawArc(oval, -90f + capFrac * 360f, sweep, false, arc)
+                    nc.drawArc(oval, -90f, sweep, false, arc)
                 }
             }
         }

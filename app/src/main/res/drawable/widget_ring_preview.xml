@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The calorie ring with sample data (1,960 eaten of 2,480 burned = 520 under), drawn like the mock
-     (viewBox 270, radius 112, stroke 20): eaten in grey-white, the gap still to go in glowing mint. -->
+     (viewBox 270, radius 112, stroke 20): eaten in grey-white, the rest in glowing mint, closed with flat ends. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="136dp"
@@ -14,26 +14,26 @@
         android:strokeWidth="20" />
     <!-- mint glow, then the mint arc -->
     <path
-        android:pathData="M29,98.84 A112,112 0 0,1 126.56,23.32"
+        android:pathData="M29,98.84 A112,112 0 0,1 135,23"
         android:strokeAlpha="0.18"
         android:strokeColor="#FF2EF2A8"
-        android:strokeLineCap="round"
+        android:strokeLineCap="butt"
         android:strokeWidth="38" />
     <path
-        android:pathData="M29,98.84 A112,112 0 0,1 126.56,23.32"
+        android:pathData="M29,98.84 A112,112 0 0,1 135,23"
         android:strokeAlpha="0.35"
         android:strokeColor="#FF2EF2A8"
-        android:strokeLineCap="round"
+        android:strokeLineCap="butt"
         android:strokeWidth="28" />
     <path
-        android:pathData="M29,98.84 A112,112 0 0,1 126.56,23.32"
+        android:pathData="M29,98.84 A112,112 0 0,1 135,23"
         android:strokeColor="#FF2EF2A8"
-        android:strokeLineCap="round"
+        android:strokeLineCap="butt"
         android:strokeWidth="20" />
     <!-- eaten -->
     <path
-        android:pathData="M135,23 A112,112 0 1,1 26.58,106.93"
-        android:strokeLineCap="round"
+        android:pathData="M135,23 A112,112 0 1,1 29,98.84"
+        android:strokeLineCap="butt"
         android:strokeWidth="20">
         <aapt:attr name="android:strokeColor">
             <gradient
