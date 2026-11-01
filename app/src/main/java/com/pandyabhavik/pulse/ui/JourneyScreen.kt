@@ -537,8 +537,8 @@ private fun TrajectoryCard(s: HomeState, ps: PaceState, rangeDays: Int?, height:
                 Legend(ps.color, "What if")
             }
         }
-        Lbl("Trajectory", Icons.AutoMirrored.Rounded.TrendingDown, C.wt, trailing = trailing ?: legend)
-        if (trailing != null) Row(Modifier.padding(top = 6.dp), content = legend)
+        Lbl("Trajectory", Icons.AutoMirrored.Rounded.TrendingDown, C.wt, trailing = legend)
+        if (trailing != null) Row(Modifier.padding(top = 10.dp), content = trailing)
         Spacer(Modifier.height(8.dp))
         val whatIf = if (showWhatIf) rows.mapNotNull { r -> r.at?.let { it to r.m.kg } } else emptyList()
         WeightChart(s, rangeDays = rangeDays, compact = false, height = height, whatIf = whatIf, whatIfColor = ps.color)
@@ -801,7 +801,8 @@ private fun WeightChart(
                     val r = (if (isGoal) 7 else 5).dp.toPx()
                     drawCircle(C.bg, r, Offset(cx, cy))
                     drawCircle(if (m == nextM) C.wt else C.wt2, r, Offset(cx, cy), style = Stroke(2.5.dp.toPx()))
-                    drawIntoCanvas { c ->
+                    // Only the goal is labelled: the timeline beside/above has every name and date.
+                    if (isGoal) drawIntoCanvas { c ->
                         textPaint.color = (if (isGoal) Color.White else Color(0xFFBFC4D3)).toArgb()
                         textPaint.textAlign = Paint.Align.LEFT
                         textPaint.isFakeBoldText = true
