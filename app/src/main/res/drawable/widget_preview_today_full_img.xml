@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:width="320dp" android:height="150dp" android:drawable="@drawable/widget_card_bg" />
+    <item android:width="112dp" android:height="112dp" android:gravity="center_vertical|left" android:left="18dp" android:drawable="@drawable/widget_ring_preview" />
+    <item android:width="150dp" android:height="5dp" android:gravity="center_vertical|left" android:left="150dp" android:bottom="30dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="99dp" />
+            <solid android:color="#FF4DA8FF" />
+        </shape>
+    </item>
+    <item android:width="150dp" android:height="5dp" android:gravity="center_vertical|left" android:left="150dp" android:top="30dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="99dp" />
+            <gradient android:angle="0" android:endColor="#FFFF7AD9" android:startColor="#FFB48CFF" />
+        </shape>
+    </item>
+</layer-list>

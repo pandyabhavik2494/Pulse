@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widget card: the same #0E1016 surface and 1dp line border the Glance widgets draw. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FF0E1016" />
+    <stroke android:width="1dp" android:color="#FF232836" />
+    <corners android:radius="26dp" />
+</shape>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget names and picker descriptions. -->
+    <string name="widget_today">Today</string>
+    <string name="widget_today_desc">Your calorie ring with today\'s balance, and your steps.</string>
+    <string name="widget_journey">Journey</string>
+    <string name="widget_journey_desc">Your trend weight and when you\'ll reach the next milestone.</string>
+    <string name="widget_milestone">Next milestone</string>
+    <string name="widget_milestone_desc">Trend weight and a bar toward your next milestone.</string>
+    <string name="widget_today_full">Today, full</string>
+    <string name="widget_today_full_desc">Calorie ring, steps and weight trend side by side.</string>
+
+    <!-- Sample data in the picker previews. -->
+    <string name="widget_sample_next" translatable="false">Next <b>115</b> · 17 Dec</string>
+    <string name="widget_sample_trend" translatable="false">117.6<small> kg</small></string>
+</resources>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Progress drawable: the bar toward the next milestone (violet to pink on the s3 track). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape android:shape="rectangle">
+            <corners android:radius="99dp" />
+            <solid android:color="#FF1C202A" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape android:shape="rectangle">
+                <corners android:radius="99dp" />
+                <gradient
+                    android:angle="0"
+                    android:endColor="#FFFF7AD9"
+                    android:startColor="#FFB48CFF" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

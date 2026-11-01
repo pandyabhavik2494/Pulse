@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Pulse</string>
+
+    <!-- Health Connect rationale (PrivacyActivity) -->
+    <string name="privacy_title">Pulse and your health data</string>
+    <string name="privacy_heading">Privacy</string>
+    <string name="privacy_summary">Pulse reads steps, calories, food, weight and sleep to show your daily balance and forecast. Nothing leaves the phone.</string>
+    <string name="privacy_reads_title">What Pulse reads</string>
+    <string name="privacy_reads">From Health Connect, with your permission: steps (from your Fitbit and the phone), calories burned (total and active, from your Fitbit), food entries (from MyFitnessPal), weight (from your scale\'s app) and sleep (from your Fitbit). While Pulse is open it also counts steps with the phone\'s own step sensor, so the number moves as you walk.</string>
+    <string name="privacy_writes_title">What Pulse writes</string>
+    <string name="privacy_writes">Nothing. It only reads.</string>
+    <string name="privacy_where_title">Where your data lives</string>
+    <string name="privacy_where">On this phone only: in Health Connect and in Pulse\'s own storage. No account, no servers, no analytics. Nothing leaves the phone.</string>
+    <string name="privacy_background_title">Why it reads in the background</string>
+    <string name="privacy_background">So the widgets and the morning and evening nudges stay current every 15 minutes without opening the app.</string>
+    <string name="privacy_control_title">Your control</string>
+    <string name="privacy_control">Turn off any permission in Health Connect at any time, or uninstall Pulse to remove its own copy.</string>
+
+    <!-- Notifications -->
+    <string name="channel_nudges">Nudges</string>
+    <string name="channel_nudges_description">A morning note after your weigh-in syncs and an 8 PM check of today\'s balance.</string>
+</resources>
