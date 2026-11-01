@@ -358,6 +358,12 @@ object Shots {
  * first screen, and has the finders, waits and layout checks the tests share.
  */
 class AppDriver(val compose: ComposeTestRule) {
+    companion object {
+        /** Longer than any of Pulse's one-shot animations (the balance roll-up is 1 s). */
+        const val SETTLE_MS = 1_500L
+        const val TICK_MS = 100L
+    }
+
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     val context: Context get() = instrumentation.targetContext
     val repo: PulseRepository get() = Graph.repo(context)
@@ -379,6 +385,11 @@ class AppDriver(val compose: ComposeTestRule) {
         TestData.install()
         TestData.quietWorkManager(context)
         Shots.grantRuntime(context.packageName)
+        // The LIVE pill and the celebration's sparkles run infinite transitions, which would keep Compose
+        // from ever being idle with an auto-advancing clock (every wait would hang). So the tests drive
+        // the clock themselves: idle() and waitFor() move it on, far enough for the 1 s number roll-ups,
+        // sheet and fade animations to finish before anything is read or screenshotted.
+        compose.mainClock.autoAdvance = false
     }
 
     fun tearDown() {
@@ -436,9 +447,17 @@ class AppDriver(val compose: ComposeTestRule) {
         return r
     }
 
+    /** Lets the app settle: moves the test clock on 1.5 s (animations finish) and waits for the main thread. */
     fun idle() {
+        runCatching { compose.mainClock.advanceTimeBy(SETTLE_MS) }
         runCatching { compose.waitForIdle() }
         instrumentation.waitForIdleSync()
+    }
+
+    /** One step of a wait: a few frames of test-clock time, so recompositions and effects run. */
+    private fun tick() {
+        runCatching { compose.mainClock.advanceTimeBy(TICK_MS) }
+        runCatching { compose.waitForIdle() }
     }
 
     fun shot(name: String) {
@@ -505,7 +524,7 @@ class AppDriver(val compose: ComposeTestRule) {
         val end = SystemClock.uptimeMillis() + timeoutMs
         while (!runCatching(condition).getOrDefault(false)) {
             if (SystemClock.uptimeMillis() > end) throw AssertionError("Timed out after ${timeoutMs / 1000} s waiting for $what")
-            runCatching { compose.waitForIdle() }
+            tick()
             Thread.sleep(50)
         }
         idle()
@@ -525,7 +544,8 @@ class AppDriver(val compose: ComposeTestRule) {
     /** Scrolls [tag] into view when it sits in a scrolling container; does nothing when it doesn't. */
     fun scrollTo(tag: String): SemanticsNodeInteraction {
         val n = node(tag)
-        runCatching { n.performScrollTo() }
+        // The scroll may animate; with the clock held, idle() is what lets it land.
+        if (runCatching { n.performScrollTo() }.isSuccess) idle()
         return n
     }
 
