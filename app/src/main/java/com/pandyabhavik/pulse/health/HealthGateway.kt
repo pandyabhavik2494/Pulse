@@ -38,6 +38,7 @@ import java.time.ZoneOffset
 import java.time.LocalDate
 import java.time.Period
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlin.math.roundToInt
@@ -152,21 +153,30 @@ class HealthGateway(private val context: Context) : HealthSource {
 
         // Daily totals. Health Connect buckets these by each record's own local time.
         val none = emptyMap<LocalDate, Int>()
-        val steps = if (READ_STEPS in granted) part("Steps", none, failed) {
-            daily(StepsRecord.COUNT_TOTAL, from, to).mapValues { it.value.toInt() }
-        } else none
-        val total = if (READ_TOTAL_CALORIES in granted) part("Calories burned", none, failed) {
-            daily(TotalCaloriesBurnedRecord.ENERGY_TOTAL, from, to).mapValues { it.value.inKilocalories.roundToInt() }
-        } else none
-        val active = if (READ_ACTIVE_CALORIES in granted) part("Active calories", none, failed) {
-            daily(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL, from, to).mapValues { it.value.inKilocalories.roundToInt() }
-        } else none
-        val distance = if (READ_DISTANCE in granted) part("Distance", none, failed) {
-            daily(DistanceRecord.DISTANCE_TOTAL, from, to).mapValues { it.value.inMeters.roundToInt() }
-        } else none
-        val floors = if (READ_FLOORS in granted) part("Floors", none, failed) {
-            daily(FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL, from, to).mapValues { it.value.roundToInt() }
-        } else none
+        // Health Connect's daily totals only count apps on its data-source priority list, so an app that isn't
+        // on it (often Fitbit) is left out. For recent days the raw records are read too, each app's day summed
+        // on its own, and the larger of the two is kept: the most complete source wins, nothing is double counted.
+        val raw = ChronoUnit.DAYS.between(from, to) <= RAW_DAYS
+        val steps = if (READ_STEPS in granted) best(
+            part("Steps", none, failed) { daily(StepsRecord.COUNT_TOTAL, from, to).mapValues { it.value.toInt() } },
+            if (raw) part("Steps", none, failed) { rawDaily(StepsRecord::class, from, to, zone, { it.startTime }, { it.startZoneOffset }) { it.count.toDouble() } } else none,
+        ) else none
+        val total = if (READ_TOTAL_CALORIES in granted) best(
+            part("Calories burned", none, failed) { daily(TotalCaloriesBurnedRecord.ENERGY_TOTAL, from, to).mapValues { it.value.inKilocalories.roundToInt() } },
+            if (raw) part("Calories burned", none, failed) { rawDaily(TotalCaloriesBurnedRecord::class, from, to, zone, { it.startTime }, { it.startZoneOffset }) { it.energy.inKilocalories } } else none,
+        ) else none
+        val active = if (READ_ACTIVE_CALORIES in granted) best(
+            part("Active calories", none, failed) { daily(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL, from, to).mapValues { it.value.inKilocalories.roundToInt() } },
+            if (raw) part("Active calories", none, failed) { rawDaily(ActiveCaloriesBurnedRecord::class, from, to, zone, { it.startTime }, { it.startZoneOffset }) { it.energy.inKilocalories } } else none,
+        ) else none
+        val distance = if (READ_DISTANCE in granted) best(
+            part("Distance", none, failed) { daily(DistanceRecord.DISTANCE_TOTAL, from, to).mapValues { it.value.inMeters.roundToInt() } },
+            if (raw) part("Distance", none, failed) { rawDaily(DistanceRecord::class, from, to, zone, { it.startTime }, { it.startZoneOffset }) { it.distance.inMeters } } else none,
+        ) else none
+        val floors = if (READ_FLOORS in granted) best(
+            part("Floors", none, failed) { daily(FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL, from, to).mapValues { it.value.roundToInt() } },
+            if (raw) part("Floors", none, failed) { rawDaily(FloorsClimbedRecord::class, from, to, zone, { it.startTime }, { it.startZoneOffset }) { it.floors } } else none,
+        ) else none
         val exercise = if (READ_EXERCISE in granted) part("Exercise", none, failed) {
             daily(ExerciseSessionRecord.EXERCISE_DURATION_TOTAL, from, to).mapValues { it.value.toMinutes().toInt() }
         } else none
@@ -311,6 +321,25 @@ class HealthGateway(private val context: Context) : HealthSource {
     }
 
     /** One value per local day in [from]..[to] for [metric]; a day no app wrote anything for is left out. */
+    /** Per day, the larger of Health Connect's total and the best single app's raw sum. */
+    private fun best(aggregate: Map<LocalDate, Int>, raw: Map<LocalDate, Int>): Map<LocalDate, Int> =
+        (aggregate.keys + raw.keys).associateWith { maxOf(aggregate[it] ?: 0, raw[it] ?: 0) }
+
+    /**
+     * Raw records summed per day and per writing app, then the app with the most that day. Doesn't depend on
+     * Health Connect's priority list, and never adds two apps' copies of the same walk together.
+     */
+    private suspend fun <T : Record> rawDaily(
+        type: KClass<T>, from: LocalDate, to: LocalDate, zone: ZoneId,
+        start: (T) -> Instant, offset: (T) -> ZoneOffset?, value: (T) -> Double,
+    ): Map<LocalDate, Int> {
+        val range = TimeRangeFilter.between(from.atStartOfDay(zone).toInstant(), to.plusDays(1).atStartOfDay(zone).toInstant())
+        return readAll(type, range)
+            .groupBy { start(it).atZone(offset(it) ?: zone).toLocalDate() }
+            .filterKeys { !it.isBefore(from) && !it.isAfter(to) }
+            .mapValues { (_, rs) -> rs.groupBy { it.metadata.dataOrigin.packageName }.values.maxOf { g -> g.sumOf(value) }.roundToInt() }
+    }
+
     private suspend fun <T : Any> daily(metric: AggregateMetric<T>, from: LocalDate, to: LocalDate): Map<LocalDate, T> {
         val range = TimeRangeFilter.between(from.atStartOfDay(), to.plusDays(1).atStartOfDay())
         val groups = client.aggregateGroupByPeriod(
@@ -406,6 +435,9 @@ class HealthGateway(private val context: Context) : HealthSource {
 
     companion object {
         const val PROVIDER = "com.google.android.apps.healthdata"
+
+        /** Ranges up to this many days also read raw records for the daily totals (a sync is 3 days). */
+        private const val RAW_DAYS = 31L
 
         val READ_STEPS = HealthPermission.getReadPermission(StepsRecord::class)
         val READ_TOTAL_CALORIES = HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class)
