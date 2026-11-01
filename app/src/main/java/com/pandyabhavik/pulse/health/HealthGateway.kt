@@ -98,11 +98,8 @@ class HealthGateway(private val context: Context) : HealthSource {
         fun label(pkg: String): String = runCatching {
             pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
         }.getOrDefault(pkg)
-        fun timeOf(r: Record): Instant? = when (r) {
-            is androidx.health.connect.client.records.IntervalRecord -> r.endTime
-            is androidx.health.connect.client.records.InstantaneousRecord -> r.time
-            else -> null
-        }
+        // When each record was last written to Health Connect: shows whether an app is still syncing.
+        fun timeOf(r: Record): Instant? = r.metadata.lastModifiedTime
         val types: List<Triple<String, String, KClass<out Record>>> = listOf(
             Triple("Steps", READ_STEPS, StepsRecord::class),
             Triple("Calories burned", READ_TOTAL_CALORIES, TotalCaloriesBurnedRecord::class),
