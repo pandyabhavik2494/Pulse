@@ -542,11 +542,9 @@ private fun CaloriesSection(s: HomeState, onClick: () -> Unit) {
             val burned = s.burned ?: 0
             val frac = if (burned > 0) (s.eaten ?: 0).toFloat() / burned else 0f
             GlowBar(frac, listOf(if (s.isOver) C.over else C.food), height = 8.dp, glow = false)
-            Text(
-                if (s.isOver) "You've eaten ${F.n(-balance)} kcal more than you burned so far" else "You can eat ${F.n(balance)} kcal more and still not out-eat your burn",
+            if (s.isOver) Text(
+                "You've eaten ${F.n(-balance)} kcal more than you burned so far",
                 style = T.small,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
             )
             }

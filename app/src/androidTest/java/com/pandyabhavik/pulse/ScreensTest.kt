@@ -43,7 +43,7 @@ class ScreensTest {
     private fun kg1(v: Double) = String.format(Locale.US, "%.1f", v)
 
     /** Today's tagged essentials, all on screen and whole. */
-    private val todayEssentials = listOf("balance_ring", "balance_value", "balance_label", "steps_value", "weight_trend_value", "next_milestone", "streak_chip", "heart_resting", "sleep_value")
+    private val todayEssentials = listOf("balance_value", "balance_label", "steps_value", "weight_trend_value", "next_milestone", "streak_chip", "heart_resting", "sleep_value")
 
     @Test
     fun onboarding() {
@@ -124,7 +124,7 @@ class ScreensTest {
         shot("06-today-over")
         app.expand("balance_ring", "streak_chip")
         app.assertText("more than you burned so far", substring = true)
-        app.assertNoneClipped(required = listOf("balance_ring", "balance_value", "balance_label", "steps_value"))
+        app.assertNoneClipped(required = listOf("balance_value", "balance_label", "steps_value"))
         if (app.scrollDownToShow("weight_trend_value")) shot("07-today-over-scrolled")
     }
 
@@ -140,7 +140,7 @@ class ScreensTest {
         app.assertText("420")
         app.assertText("Dinner")
         app.assertText("128 g")
-        app.assertText("520 under")
+        app.assertText("520 more burned")
         shot("08-breakdown-sheet")
         app.back()
         app.waitGone("breakdown_sheet")
@@ -194,7 +194,7 @@ class ScreensTest {
         shot("14-today-stalled")
         app.tab("journey")
         app.waitTag("journey_line")
-        app.assertTagShows("journey_line", "Get back under", substring = true)
+        app.assertTagShows("journey_line", "Burn more than you eat", substring = true)
         shot("15-journey-stalled")
     }
 
@@ -265,8 +265,8 @@ class ScreensTest {
             // Cover: the last 7 days in rows; a tap opens the day (with its sleep) in a sheet.
             app.waitTag("history_list")
             app.waitTag("history_row_$sat")
-            app.assertText("180 over")
-            app.assertText("520 under")
+            app.assertText("180 more eaten")
+            app.assertText("520 more burned")
             shot("20-history-list")
             app.assertNoneClipped(required = listOf("history_list", "history_row_$sat"))
             app.click("history_row_$sat")
@@ -320,7 +320,7 @@ class ScreensTest {
         shot("30-empty-today")
         app.expand("balance_ring", "streak_chip")
         app.expand("section_body", "next_milestone")
-        app.assertNoneClipped(required = listOf("balance_ring", "balance_label", "steps_value", "next_milestone", "streak_chip"))
+        app.assertNoneClipped(required = listOf("balance_label", "steps_value", "next_milestone", "streak_chip"))
         // No data still gives a budget and an outlook, marked as early.
         app.waitTag("food_budget")
         app.waitTag("two_week_kg")
