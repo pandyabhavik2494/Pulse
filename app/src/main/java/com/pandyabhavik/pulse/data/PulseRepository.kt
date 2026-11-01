@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import java.time.LocalDate
 import java.time.ZoneId
@@ -87,13 +88,19 @@ class PulseRepository(
      * Reads Health Connect into Room: the last 90 days the first time, then the last 3 days (a late Fitbit
      * sync or a meal logged after midnight can still change them). Then rebuilds the state, redraws the
      * widgets and sends any nudge that is due. Runs when the app opens, on pull-down, and every 15
-     * minutes in the background. False when Health Connect couldn't be read.
+     * minutes in the background. False when Health Connect couldn't be read. [quick] (from the UI) leaves the
+     * widget redraw and nudges running after it returns.
      */
-    suspend fun sync(): Boolean = syncLock.withLock {
+    suspend fun sync(quick: Boolean = false): Boolean = syncLock.withLock {
         _syncing.value = true
         try {
             val ok = try {
-                read()
+                // Health Connect can stall (a busy provider, a slow first 90-day read); never hold the
+                // sync, and the Sync now button with it, for longer than this.
+                withTimeoutOrNull(READ_TIMEOUT_MS) { read() } ?: run {
+                    lastError = "Health Connect took too long to answer. Try again in a minute."
+                    false
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -102,8 +109,13 @@ class PulseRepository(
                 false
             }
             val s = snapshot()
-            refreshWidgets()
-            runCatching { postNudges(s) }.onFailure { Log.w(TAG, "Nudges failed", it) }
+            val extras: suspend () -> Unit = {
+                refreshWidgets()
+                runCatching { postNudges(s) }.onFailure { Log.w(TAG, "Nudges failed", it) }
+            }
+            // [quick] (the app on screen): widgets and nudges don't hold up the sync, the screen already has
+            // the new numbers. In the background they run inline, so the work isn't done before they are.
+            if (quick) scope.launch { extras() } else extras()
             ok
         } finally {
             _syncing.value = false
@@ -400,6 +412,7 @@ class PulseRepository(
         private const val TAG = "PulseRepository"
         const val HISTORY_DAYS = 90L
         const val RECENT_DAYS = 3L
+        private const val READ_TIMEOUT_MS = 45_000L
         private const val BACKGROUND_SUFFIX = "READ_HEALTH_DATA_IN_BACKGROUND"
     }
 }

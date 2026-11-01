@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** The UI's single door to the repository. All numbers come from [state]; actions go straight to the repo. */
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -38,10 +39,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _syncing.value = true
             try {
-                val ok = runCatching { repo.sync() }.getOrDefault(false)
+                // A background sync may hold the lock; give up waiting rather than spin forever.
+                val result = withTimeoutOrNull(60_000) { runCatching { repo.sync(quick = true) }.getOrDefault(false) }
+                val ok = result == true
                 _lastSyncFailed.value = !ok
                 val problems = repo.lastProblems
                 val note = when {
+                    result == null -> "Sync is taking too long. Try again in a minute."
                     !ok -> repo.lastError ?: "Couldn't read Health Connect"
                     problems.isEmpty() -> "Synced just now"
                     else -> "Synced, but couldn't read ${problems.joinToString { it.substringBefore(':') }}"
