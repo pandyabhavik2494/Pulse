@@ -293,7 +293,7 @@ class ScreensTest {
         app.waitText("No food logged yet")
         assertTrue("no balance number before any food", !app.exists("balance_value"))
         app.assertTagShows("steps_value", "0")
-        app.assertText("No heart rate yet")
+        app.assertText("No heart data yet")
         app.assertText("No sleep recorded last night")
         shot("30-empty-today")
         app.assertNoneClipped(required = listOf("balance_ring", "balance_label", "steps_value", "next_milestone", "streak_chip"))
