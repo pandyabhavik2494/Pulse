@@ -430,12 +430,22 @@ internal fun TodayFullView(context: Context, s: HomeState) {
     val steps = grouped(s.liveSteps)
     val trend = trendText(s)
     val next = milestoneText(s) ?: s.profile?.let { "Goal ${kg(it.goalKg)} kg" } ?: ""
-    val lblDp = fitDp("WEIGHT", 11f * k, col)
-    val stepsDp = fitDp(steps, 22f * k, col)
+    val lblDp0 = fitDp("WEIGHT", 11f * k, col)
+    val stepsDp0 = fitDp(steps, 22f * k, col)
     // "117.6 kg": the number and a smaller unit share the column.
     val unitRatio = 13f / 22f
-    val trendDp = minOf(22f * k, col * 0.94f / (ems(trend, true) + ems(" kg", true) * unitRatio))
-    val nextDp = fitDp(next, 12f * k, col)
+    val trendDp0 = minOf(22f * k, col * 0.94f / (ems(trend, true) + ems(" kg", true) * unitRatio))
+    val nextDp0 = fitDp(next, 12f * k, col)
+    // The column holds five text lines plus the bar; on a short 4x2 (the cover screen's 156dp) they didn't
+    // all fit and the last line was cut. Text lines take about 1.4x their size (font padding included),
+    // so shrink everything together until the column fits the card's height.
+    val gaps = (4f + 5f + 6f) * k
+    val need = (lblDp0 * 2 + stepsDp0 + trendDp0 + nextDp0) * 1.4f + gaps
+    val fit = ((h - 2f - 2 * padV) / need).coerceIn(0.6f, 1f)
+    val lblDp = lblDp0 * fit
+    val stepsDp = stepsDp0 * fit
+    val trendDp = trendDp0 * fit
+    val nextDp = nextDp0 * fit
 
     Card(openTab(context, TAB_TODAY)) {
         Row(
@@ -457,7 +467,7 @@ internal fun TodayFullView(context: Context, s: HomeState) {
                     contentScale = ContentScale.FillBounds,
                     modifier = GlanceModifier.fillMaxWidth().height((5f * k).dp),
                 )
-                Spacer(GlanceModifier.height((10f * k).dp))
+                Spacer(GlanceModifier.height((6f * k).dp))
                 Line(context, "WEIGHT", WC.mute, lblDp)
                 Row(verticalAlignment = Alignment.Bottom) {
                     Line(context, trend, WC.wt, trendDp)
