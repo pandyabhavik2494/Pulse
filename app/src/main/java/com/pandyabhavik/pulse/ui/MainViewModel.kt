@@ -82,4 +82,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setNudges(morning: Boolean, evening: Boolean) {
         viewModelScope.launch { repo.setNudges(morning, evening) }
     }
+
+    fun setDashboard(tiles: List<String>) {
+        viewModelScope.launch { repo.setDashboard(tiles) }
+    }
 }

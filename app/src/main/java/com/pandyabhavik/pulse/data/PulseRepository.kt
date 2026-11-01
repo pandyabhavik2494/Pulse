@@ -398,6 +398,11 @@ class PulseRepository(
         store.update { it.copy(morningNudge = morning, eveningNudge = evening) }
     }
 
+    /** Saves which tiles the Today dashboard shows, in order. An empty choice goes back to the default. */
+    suspend fun setDashboard(tiles: List<String>) {
+        store.update { it.copy(dashboard = tiles.distinct().ifEmpty { Settings.DEFAULT_DASHBOARD }) }
+    }
+
     /** Wipes every stored day and setting (a fresh install, as far as Pulse knows). */
     suspend fun resetForTests() {
         syncLock.withLock {

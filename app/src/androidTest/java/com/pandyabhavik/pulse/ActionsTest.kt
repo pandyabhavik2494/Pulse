@@ -248,4 +248,48 @@ class ActionsTest {
         app.assertNotClipped("streak_chip")
         shot("53-forgiving-streak")
     }
+
+    // ---- Dashboard ---------------------------------------------------------------------------------
+
+    @Test
+    fun dashboardCanBeCustomized() {
+        app.open(Scene.UNDER)
+        app.waitTag("dashboard")
+        assertEquals(com.pandyabhavik.pulse.data.Settings.DEFAULT_DASHBOARD, app.settings().dashboard)
+        assertTrue(app.exists("dash_burned"))
+        assertFalse(app.exists("dash_hrv"))
+        app.click("dashboard_edit")
+        app.waitTag("dashboard_sheet")
+        shot("54-dashboard-customize")
+        // Drop Burned, add HRV and distance.
+        app.click("dash_opt_burned")
+        app.scrollTo("dash_opt_distance")
+        app.click("dash_opt_distance")
+        app.scrollTo("dash_opt_hrv")
+        app.click("dash_opt_hrv")
+        app.scrollTo("dashboard_save")
+        app.click("dashboard_save")
+        app.waitGone("dashboard_sheet")
+        val want = listOf("calories", "steps", "weight", "resting_hr", "sleep", "distance", "hrv")
+        app.waitFor("the dashboard choice to be saved") { app.settings().dashboard == want }
+        app.waitTag("dash_hrv")
+        assertFalse(app.exists("dash_burned"))
+        app.assertTagShows("dash_hrv", "${app.state().history.take(7).firstNotNullOf { it.hrvMs }} ms")
+        app.assertNoneClipped(listOf("dash_hrv", "dash_distance", "dash_calories"))
+        shot("55-dashboard-customized")
+
+        app.relaunch()
+        app.waitTag("dash_hrv")
+        assertFalse(app.exists("dash_burned"))
+
+        // Reset puts the default six back.
+        app.click("dashboard_edit")
+        app.waitTag("dashboard_sheet")
+        app.scrollTo("dashboard_reset")
+        app.click("dashboard_reset")
+        app.scrollTo("dashboard_save")
+        app.click("dashboard_save")
+        app.waitFor("the default dashboard to be back") { app.settings().dashboard == com.pandyabhavik.pulse.data.Settings.DEFAULT_DASHBOARD }
+        app.waitTag("dash_burned")
+    }
 }

@@ -40,7 +40,13 @@ data class Settings(
     val firstSyncDone: Boolean = false,
     /** The last successful Health Connect read. */
     val lastSync: Instant? = null,
+    /** The tiles on Today's dashboard, in order (ids from the dashboard catalogue). */
+    val dashboard: List<String> = DEFAULT_DASHBOARD,
 ) {
+    companion object {
+        val DEFAULT_DASHBOARD = listOf("calories", "steps", "weight", "resting_hr", "sleep", "burned")
+    }
+
     /** Milestone weights are computed, so compare with a tolerance rather than exact Double equality. */
     fun isCelebrated(kg: Double): Boolean = celebratedKg.any { abs(it - kg) < 0.001 }
 }
@@ -71,6 +77,7 @@ class SettingsStore(context: Context) {
         val lastEvening = stringPreferencesKey("last_evening")
         val firstSync = booleanPreferencesKey("first_sync_done")
         val lastSync = longPreferencesKey("last_sync")
+        val dashboard = stringPreferencesKey("dashboard_tiles")
     }
 
     val flow: Flow<Settings> = store.data.map { read(it) }
@@ -92,6 +99,8 @@ class SettingsStore(context: Context) {
         lastEveningNudge = p[K.lastEvening]?.let { date(it) },
         firstSyncDone = p[K.firstSync] ?: false,
         lastSync = p[K.lastSync]?.let(Instant::ofEpochMilli),
+        dashboard = p[K.dashboard]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.takeIf { it.isNotEmpty() }
+            ?: Settings.DEFAULT_DASHBOARD,
     )
 
     /** A profile exists once all of its required fields were written by onboarding. */
@@ -135,6 +144,7 @@ class SettingsStore(context: Context) {
         putDate(p, K.lastEvening, s.lastEveningNudge)
         p[K.firstSync] = s.firstSyncDone
         if (s.lastSync != null) p[K.lastSync] = s.lastSync.toEpochMilli() else p.remove(K.lastSync)
+        p[K.dashboard] = s.dashboard.joinToString(",")
     }
 
     private fun putDate(p: MutablePreferences, key: Preferences.Key<String>, value: LocalDate?) {

@@ -300,66 +300,6 @@ private fun BalanceCard(s: HomeState, onClick: () -> Unit, modifier: Modifier = 
     }
 }
 
-/** One number on the dashboard: small label, the value, its unit. */
-@Composable
-private fun DashCell(label: String, value: String, unit: String, color: Color, modifier: Modifier = Modifier) {
-    Column(
-        modifier
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
-            .background(C.s2)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-    ) {
-        Text(label.uppercase(), style = T.caps, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(
-            value,
-            style = T.metric.copy(fontSize = 22.sp, lineHeight = 26.sp, letterSpacing = 0.sp, color = color),
-            maxLines = 1,
-            softWrap = false,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        Text(unit, style = T.small, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
-/** The overview at the top of Today: the top-line number from every section, nothing else. */
-@Composable
-private fun Dashboard(s: HomeState) {
-    val d = s.today
-    val resting = s.history.take(3).firstOrNull { it.restingHr != null }?.restingHr ?: d.hrAvg
-    val balance = s.balance
-    val night = d.sleepMinutes
-    PCard(Modifier.testTag("dashboard"), padding = 12.dp) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            DashCell(
-                "Calories",
-                balance?.let { F.n(abs(it)) } ?: "—",
-                when {
-                    balance == null -> "no food yet"
-                    balance < 0 -> "kcal over"
-                    else -> "kcal under"
-                },
-                when {
-                    balance == null -> C.mute
-                    balance < 0 -> C.over
-                    else -> C.under
-                },
-                Modifier.weight(1f),
-            )
-            DashCell("Steps", F.n(s.liveSteps), "of ${F.n(s.profile?.stepGoal ?: 10_000)}", C.steps, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            DashCell("Weight", s.trendKg?.let { F.kg(it) } ?: "—", if (s.trendKg != null) "kg trend" else "no weigh-in", C.wt, Modifier.weight(1f))
-            DashCell("Heart", resting?.let { "$it" } ?: "—", if (resting != null) "bpm resting" else "no data", C.over, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            DashCell("Sleep", night?.let { "${it / 60}h ${it % 60}m" } ?: "—", if (night != null) "last night" else "no data", C.sleep, Modifier.weight(1f))
-            DashCell("Burned", s.burned?.let { F.n(it) } ?: "—", if (s.burned != null) "kcal so far" else "no data", C.food, Modifier.weight(1f))
-        }
-    }
-}
-
 /** One number in a small card: label, value, a short line under it. */
 @Composable
 private fun Tile(
@@ -505,7 +445,6 @@ private val LocalOpen = compositionLocalOf { false }
 @Composable
 private fun Details(content: @Composable ColumnScope.() -> Unit) {
     if (LocalOpen.current) Column(Modifier.fillMaxWidth(), content = content)
-}
 }
 
 /** The section's main number with its unit beside it. */
