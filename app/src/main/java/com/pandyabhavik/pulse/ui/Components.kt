@@ -33,6 +33,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -487,15 +490,20 @@ fun ringNumberSize(text: String, base: Float): Float = when {
 @Composable
 fun PullBox(refreshing: Boolean, onRefresh: () -> Unit, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val state = rememberPullToRefreshState()
+    // The spinner is only for a sync you pulled for. Background syncs (app opening, every 15 minutes)
+    // show in the header's "Syncing…" chip instead of a spinner sitting on top of the ring.
+    var pulled by remember { mutableStateOf(false) }
+    LaunchedEffect(refreshing) { if (!refreshing) pulled = false }
+    val spinning = refreshing && pulled
     PullToRefreshBox(
-        isRefreshing = refreshing,
-        onRefresh = onRefresh,
+        isRefreshing = spinning,
+        onRefresh = { pulled = true; onRefresh() },
         modifier = modifier,
         state = state,
         indicator = {
             PullToRefreshDefaults.Indicator(
                 state = state,
-                isRefreshing = refreshing,
+                isRefreshing = spinning,
                 modifier = Modifier.align(Alignment.TopCenter),
                 containerColor = Color(0xFF2A3040),
                 color = C.under,
