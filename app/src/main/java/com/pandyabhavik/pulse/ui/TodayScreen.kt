@@ -379,19 +379,19 @@ private fun StepsTile(s: HomeState, modifier: Modifier = Modifier) {
 
 @Composable
 private fun WeightTile(s: HomeState, modifier: Modifier = Modifier) {
-    val p = s.profile
-    val kg = s.trendKg
     val today = s.now.toLocalDate()
+    // The last weigh-in from the scale, as the scale showed it. The trend is the line under it.
+    val last = s.history.firstOrNull { it.weightKg != null }
     Tile(
         "Weight", Icons.Rounded.MonitorWeight, C.wt,
-        kg?.let { F.kg(it) } ?: "—",
+        last?.weightKg?.let { F.kg(it) } ?: "—",
         when {
-            kg == null -> "no weigh-in yet"
-            p == null -> "kg"
-            else -> "kg · ${F.signedKg(kg - p.startKg)} since ${F.date(p.startDate, today)}"
+            last == null -> "no weigh-in yet"
+            else -> "kg ${if (last.date == today) "today" else F.date(last.date, today)}" +
+                (s.trendKg?.let { " · trend ${F.kg(it)}" } ?: "")
         },
         modifier,
-        valueTag = "weight_trend_value",
+        valueTag = "weight_value",
     )
 }
 
@@ -648,14 +648,24 @@ private fun ActivitySection(s: HomeState) {
 @Composable
 private fun BodySection(s: HomeState) {
     val p = s.profile ?: return
-    val kg = s.trendKg
     val today = s.now.toLocalDate()
     val lastWeighIn = s.history.firstOrNull { it.weightKg != null }
+    // The big number is the last weigh-in from the VeSync scale; the smoothed trend sits under it.
+    val kg = lastWeighIn?.weightKg
     Section("Body", Icons.Rounded.MonitorWeight, C.wt, "section_body") {
         if (kg == null) {
-            EmptyLine("No weigh-in yet", "Step on your VeSync scale. Pulse uses a smoothed trend, so one heavy morning doesn't count.")
+            EmptyLine("No weigh-in yet", "Step on your VeSync scale and your weight shows here.")
         } else {
-            BigValue(F.kg(kg), "kg trend", C.wt, "weight_trend_value")
+            BigValue(F.kg(kg), "kg ${if (lastWeighIn!!.date == today) "today" else F.date(lastWeighIn.date, today)}", C.wt, "weight_value")
+            s.trendKg?.let { t ->
+                Text(
+                    "Trend ${F.kg(t)} kg (smooths out day-to-day water swings)",
+                    style = T.small.copy(fontSize = 13.sp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(bottom = 4.dp).testTag("weight_trend_value"),
+                )
+            }
             Details {
             val change = kg - p.startKg
             Text(
@@ -673,13 +683,7 @@ private fun BodySection(s: HomeState) {
         }
         Details {
         TwoWeekBlock(s)
-        FieldRow(
-            "Last weigh-in",
-            lastWeighIn?.let { "${F.kg(it.weightKg!!)} kg" } ?: "—",
-            valueColor = if (lastWeighIn == null) C.mute else C.ink,
-            note = lastWeighIn?.let { if (it.date == today) "(today)" else "(${F.date(it.date, today)})" },
-        )
-        val bmiKg = kg ?: lastWeighIn?.weightKg
+        val bmiKg = kg
         if (bmiKg != null && p.heightCm > 0) {
             val m = p.heightCm / 100.0
             FieldRow("BMI", one(bmiKg / (m * m)))

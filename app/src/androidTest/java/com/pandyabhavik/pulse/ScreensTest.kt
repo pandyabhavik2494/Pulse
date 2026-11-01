@@ -43,7 +43,7 @@ class ScreensTest {
     private fun kg1(v: Double) = String.format(Locale.US, "%.1f", v)
 
     /** Today's tagged essentials, all on screen and whole. */
-    private val todayEssentials = listOf("balance_value", "balance_label", "steps_value", "weight_trend_value", "next_milestone", "streak_chip", "heart_resting", "sleep_value")
+    private val todayEssentials = listOf("balance_value", "balance_label", "steps_value", "weight_value", "weight_trend_value", "next_milestone", "streak_chip", "heart_resting", "sleep_value")
 
     @Test
     fun onboarding() {
@@ -80,6 +80,7 @@ class ScreensTest {
         app.assertTagShows("steps_value", n(TestData.TODAY_STEPS))
         val s = checkNotNull(app.seeded)
         app.assertTagShows("weight_trend_value", kg1(checkNotNull(s.trendKg)))
+        app.assertTagShows("weight_value", kg1(checkNotNull(s.history.first { it.weightKg != null }.weightKg)), substring = false)
         assertTrue("sections start collapsed", !app.exists("streak_chip") && !app.exists("next_milestone"))
         app.assertTagShows("heart_resting", "${TestData.RESTING_HR}")
         app.assertTagShows("sleep_value", TestData.TODAY_SLEEP_SHORT)
@@ -183,7 +184,7 @@ class ScreensTest {
         app.waitText("No food logged yet")
         assertTrue("no balance number before any food", !app.exists("balance_value"))
         shot("13-today-no-food-yet")
-        app.assertNoneClipped(required = listOf("balance_ring", "steps_value", "weight_trend_value"))
+        app.assertNoneClipped(required = listOf("balance_ring", "steps_value", "weight_value"))
     }
 
     @Test

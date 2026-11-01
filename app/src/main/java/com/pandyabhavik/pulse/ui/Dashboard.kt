@@ -100,7 +100,13 @@ val DASH_TILES: List<DashTile> = listOf(
     DashTile("floors", "Floors", "Activity", C.steps) { s -> s.today.floors?.let { DashValue("$it", "floors climbed") } },
     DashTile("exercise", "Exercise", "Activity", C.steps) { s -> s.today.exerciseMin?.let { DashValue("$it", "min exercise") } },
 
-    DashTile("weight", "Weight", "Weight", C.wt) { s -> s.trendKg?.let { DashValue(F.kg(it), "kg trend") } },
+    DashTile("weight", "Weight", "Weight", C.wt) { s ->
+        val today = s.now.toLocalDate()
+        s.history.firstOrNull { it.weightKg != null }?.let { d ->
+            DashValue(F.kg(d.weightKg!!), "kg ${if (d.date == today) "today" else F.date(d.date, today)}")
+        }
+    },
+    DashTile("weight_trend", "Weight trend", "Weight", C.wt) { s -> s.trendKg?.let { DashValue(F.kg(it), "kg trend") } },
     DashTile("lost", "Lost", "Weight", C.wt) { s ->
         val p = s.profile ?: return@DashTile null
         val kg = s.trendKg ?: return@DashTile null

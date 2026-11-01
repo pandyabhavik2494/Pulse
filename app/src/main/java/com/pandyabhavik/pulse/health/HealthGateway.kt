@@ -205,7 +205,11 @@ class HealthGateway(private val context: Context) : HealthSource {
         // Weight: the latest weigh-in of each day.
         val weight = HashMap<LocalDate, Double>()
         if (READ_WEIGHT in granted) part("Weight", Unit, failed) {
-            readAll(WeightRecord::class, range)
+            val all = readAll(WeightRecord::class, range)
+            // Weight comes from the VeSync scale. Other apps (Fitbit, Google Fit, Samsung Health) can copy or
+            // re-log it; when VeSync has written any weigh-ins, only its own are used.
+            val fromScale = all.filter { it.metadata.dataOrigin.packageName.contains("vesync", ignoreCase = true) }
+            (fromScale.ifEmpty { all })
                 .groupBy { it.time.atZone(it.zoneOffset ?: zone).toLocalDate() }
                 .forEach { (date, records) ->
                     if (date.isBefore(from) || date.isAfter(to)) return@forEach
