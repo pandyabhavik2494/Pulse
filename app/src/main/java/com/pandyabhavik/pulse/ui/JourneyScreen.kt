@@ -107,7 +107,6 @@ fun JourneyScreen(s: HomeState) {
 
 private fun stalled(s: HomeState) = s.forecast?.source == RateSource.STALLED
 
-}
 
 // ---- Pace (shared by every card on the page) ---------------------------------------------------
 
