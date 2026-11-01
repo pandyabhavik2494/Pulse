@@ -108,6 +108,9 @@ class PulseRepository(
                 lastError = e.message ?: e.javaClass.simpleName
                 false
             }
+            if (ok && pendingBackfill != null) {
+                if (quick) scope.launch { runCatching { backfill() } } else runCatching { backfill() }
+            }
             val s = snapshot()
             val extras: suspend () -> Unit = {
                 refreshWidgets()
@@ -136,12 +139,49 @@ class PulseRepository(
             return false
         }
         val today = today()
-        // A full read the first time, and again whenever more history becomes readable (the history
-        // permission was just allowed, or Pulse reads further back than before): early trends need it.
+        // A full history read is due the first time, and again whenever more history becomes readable (the
+        // history permission was just allowed, or Pulse reads further back than before). It runs after this,
+        // in chunks, so a slow year-long read can never hold up today's numbers.
         val backfill = "$FETCH_DAYS-${granted.any { it.endsWith(HISTORY_SUFFIX) }}"
-        val settingsNow = store.current()
-        val first = !settingsNow.firstSyncDone || settingsNow.backfill != backfill
-        val from = if (first) today.minusDays(FETCH_DAYS - 1) else today.minusDays(RECENT_DAYS - 1)
+        if (store.current().backfill != backfill) pendingBackfill = backfill
+        if (!readRange(today.minusDays(RECENT_DAYS - 1), today)) return false
+        val at = clock().instant()
+        store.update { it.copy(firstSyncDone = true, lastSync = at) }
+        return true
+    }
+
+    /** Set by [read] when a full history read is due; [backfill] does it. */
+    @Volatile private var pendingBackfill: String? = null
+    private val backfillLock = Mutex()
+
+    /**
+     * Reads the history in 30-day chunks going back from yesterday, storing each one as it lands, so an
+     * interrupted backfill still leaves the most recent weeks in. Marked done only when every chunk came back.
+     */
+    private suspend fun backfill() = backfillLock.withLock {
+        val key = pendingBackfill ?: return@withLock
+        val today = today()
+        var end = today.minusDays(RECENT_DAYS)
+        val oldest = today.minusDays(FETCH_DAYS - 1)
+        var allOk = true
+        while (!end.isBefore(oldest)) {
+            val start = maxOf(oldest, end.minusDays(BACKFILL_CHUNK_DAYS - 1))
+            val ok = runCatching { withTimeoutOrNull(READ_TIMEOUT_MS) { readRange(start, end) } }
+                .onFailure { if (it is CancellationException) throw it; Log.w(TAG, "Backfill $start..$end failed", it) }
+                .getOrNull() == true
+            if (!ok) { allOk = false; break }
+            end = start.minusDays(1)
+        }
+        if (allOk) {
+            store.update { it.copy(backfill = key) }
+            pendingBackfill = null
+        }
+        snapshot()
+    }
+
+    /** Reads [from]..[to] into Room. False (with [lastError]) when nothing could be read. */
+    private suspend fun readRange(from: LocalDate, today: LocalDate): Boolean {
+        val source = health
         val logs = source.readDays(from, today, zone())
             .filter { !it.date.isBefore(from) && !it.date.isAfter(today) }
         val problems = source.problems
@@ -199,8 +239,6 @@ class PulseRepository(
             lastError = "Couldn't read Health Connect (${problems.first()})"
             return false
         }
-        val at = clock().instant()
-        store.update { it.copy(firstSyncDone = true, lastSync = at, backfill = backfill) }
         return true
     }
 
@@ -424,6 +462,7 @@ class PulseRepository(
         /** How far back a full read goes: a year, so trends have something to start from on day one. */
         const val FETCH_DAYS = 365L
         const val RECENT_DAYS = 3L
+        private const val BACKFILL_CHUNK_DAYS = 30L
         private const val READ_TIMEOUT_MS = 45_000L
         private const val BACKGROUND_SUFFIX = "READ_HEALTH_DATA_IN_BACKGROUND"
         private const val HISTORY_SUFFIX = "READ_HEALTH_DATA_HISTORY"
