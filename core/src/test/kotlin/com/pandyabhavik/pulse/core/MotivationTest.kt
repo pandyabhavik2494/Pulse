@@ -148,15 +148,15 @@ class MotivationTest {
 
     @Test fun spillLine() {
         assertEquals(
-            "One day over doesn't move the trend much. Your 7-day average is still 410 kcal under.",
+            "One day of eating more than you burned doesn't move the trend much. Over the last 7 days you still burned 410 kcal a day more than you ate.",
             Motivation.spillLine(300, 410),
         )
         assertEquals(
-            "One day over doesn't move the trend much. Your 7-day average is still 1,140 kcal under.",
+            "One day of eating more than you burned doesn't move the trend much. Over the last 7 days you still burned 1,140 kcal a day more than you ate.",
             Motivation.spillLine(300, 1140),
         )
-        assertEquals("One day over doesn't move the trend much. Tomorrow is a fresh start.", Motivation.spillLine(300, null))
-        assertTrue(Motivation.spillLine(300, -120).contains("back under"))
+        assertEquals("One day of eating more than you burned doesn't move the trend much. Tomorrow is a fresh start.", Motivation.spillLine(300, null))
+        assertTrue(Motivation.spillLine(300, -120).contains("back to burning more"))
         assertTrue(Motivation.spillLine(300, 0).contains("even"))
         for (a in listOf(null, -500, 0, 500)) assertNoGuilt(Motivation.spillLine(800, a))
     }
@@ -214,20 +214,20 @@ class MotivationTest {
 
     @Test fun eveningNudgeUnder() {
         assertEquals(
-            "520 kcal under, day 5 of your streak" to "You have room for a 300 kcal snack and still keep a solid deficit.",
+            "Burned 520 kcal more than eaten, day 5 of your streak" to "You have room for a 300 kcal snack and still keep a solid deficit.",
             Motivation.eveningNudge(520, 5),
         )
-        assertEquals("1,140 kcal under so far", Motivation.eveningNudge(1140, 1).first)
+        assertEquals("Burned 1,140 kcal more than eaten so far", Motivation.eveningNudge(1140, 1).first)
         assertEquals("You have room for a 900 kcal snack and still keep a solid deficit.", Motivation.eveningNudge(1140, 1).second)
-        assertEquals("You're under for the day. A calm evening keeps it that way.", Motivation.eveningNudge(250, 0).second)
+        assertEquals("You've burned more than you've eaten today. A calm evening keeps it that way.", Motivation.eveningNudge(250, 0).second)
     }
 
     @Test fun eveningNudgeOverAndEvenAreKind() {
         val over = Motivation.eveningNudge(-300, 4)
-        assertEquals("300 kcal over so far", over.first)
+        assertEquals("Eaten 300 kcal more than burned so far", over.first)
         assertTrue(over.second.contains("streak is still alive"))
         assertEquals("Right at even so far", Motivation.eveningNudge(0, 0).first)
-        assertEquals("1,250 kcal over so far", Motivation.eveningNudge(-1250, 0).first)
+        assertEquals("Eaten 1,250 kcal more than burned so far", Motivation.eveningNudge(-1250, 0).first)
         for (b in listOf(-1250, -300, 0)) for (s in listOf(0, 4)) {
             val (t, body) = Motivation.eveningNudge(b, s); assertNoGuilt(t + body)
         }
@@ -324,14 +324,14 @@ class MotivationTest {
             if (it.date in saturdays) it.copy(eaten = 3400, meals = Meals(400, 600, 2000, 400)) else it
         }
         val r = recap(days, monday23)!!
-        assertEquals("Saturdays were your over days three times. Plan Saturday dinner by Friday night.", r.focusTip)
+        assertEquals("Saturdays were the days you ate more than you burned three times. Plan Saturday dinner by Friday night.", r.focusTip)
         assertEquals(6, r.daysUnder)
         assertEquals(7, r.focusDaysUnder)
         // the tip names the meal that was biggest on those days
         val snacky = Fixtures.bhavikDays(24).map {
             if (it.date in saturdays.take(2)) it.copy(eaten = 3400, meals = Meals(300, 500, 600, 2000)) else it
         }
-        assertEquals("Saturdays were your over days twice. Plan Saturday snacks by Friday night.", recap(snacky, monday23)!!.focusTip)
+        assertEquals("Saturdays were the days you ate more than you burned twice. Plan Saturday snacks by Friday night.", recap(snacky, monday23)!!.focusTip)
     }
 
     @Test fun recapSingleOverDayFallsBackToProteinWhenStepsAreGood() {

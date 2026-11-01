@@ -81,7 +81,10 @@ object F {
     }
 
     /** "520 under" / "180 over". */
-    fun balanceShort(b: Int): String = if (b >= 0) "${n(b)} under" else "${n(-b)} over"
+    fun balanceShort(b: Int): String = if (b >= 0) "${n(b)} more burned" else "${n(-b)} more eaten"
+
+    /** Plain words for the day's balance: no "under" or "over". */
+    fun balanceWords(eatenMore: Boolean): String = if (eatenMore) "eaten more than burned" else "burned more than eaten"
 
     /** "+3 days earlier" style copy for a milestone shift. */
     fun shift(days: Int): String = when {

@@ -254,7 +254,8 @@ private fun ColumnScope.ConnectStep(
         PermRow("Weight and body fat · scale", allowed("READ_WEIGHT", "READ_BODY_FAT", "READ_LEAN_BODY_MASS"))
         PermRow("Sleep · Fitbit", allowed("READ_SLEEP"))
         PermRow("Heart rate and vitals · Fitbit", allowed("READ_HEART_RATE", "READ_RESTING_HEART_RATE", "READ_HEART_RATE_VARIABILITY", "READ_OXYGEN_SATURATION", "READ_RESPIRATORY_RATE", "READ_VO2_MAX"))
-        PermRow("Read in background", allowed("READ_HEALTH_DATA_IN_BACKGROUND"), divider = false)
+        PermRow("Read in background", allowed("READ_HEALTH_DATA_IN_BACKGROUND"))
+        PermRow("Past data (for early trends)", allowed("READ_HEALTH_DATA_HISTORY"), divider = false)
     }
     val allHealth = hcOk && s.missingPermissions.isEmpty()
     PButton(

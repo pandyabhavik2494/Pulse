@@ -42,9 +42,11 @@ data class Settings(
     val lastSync: Instant? = null,
     /** The tiles on Today's dashboard, in order (ids from the dashboard catalogue). */
     val dashboard: List<String> = DEFAULT_DASHBOARD,
+    /** Which full history read was done last ("365-true" = a year, with the history permission). */
+    val backfill: String? = null,
 ) {
     companion object {
-        val DEFAULT_DASHBOARD = listOf("calories", "steps", "weight", "resting_hr", "sleep", "burned")
+        val DEFAULT_DASHBOARD = listOf("calories", "left_to_eat", "steps", "weight", "in_2_weeks", "resting_hr", "sleep", "burned")
     }
 
     /** Milestone weights are computed, so compare with a tolerance rather than exact Double equality. */
@@ -78,6 +80,7 @@ class SettingsStore(context: Context) {
         val firstSync = booleanPreferencesKey("first_sync_done")
         val lastSync = longPreferencesKey("last_sync")
         val dashboard = stringPreferencesKey("dashboard_tiles")
+        val backfill = stringPreferencesKey("backfill")
     }
 
     val flow: Flow<Settings> = store.data.map { read(it) }
@@ -101,6 +104,7 @@ class SettingsStore(context: Context) {
         lastSync = p[K.lastSync]?.let(Instant::ofEpochMilli),
         dashboard = p[K.dashboard]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.takeIf { it.isNotEmpty() }
             ?: Settings.DEFAULT_DASHBOARD,
+        backfill = p[K.backfill],
     )
 
     /** A profile exists once all of its required fields were written by onboarding. */
@@ -145,6 +149,7 @@ class SettingsStore(context: Context) {
         p[K.firstSync] = s.firstSyncDone
         if (s.lastSync != null) p[K.lastSync] = s.lastSync.toEpochMilli() else p.remove(K.lastSync)
         p[K.dashboard] = s.dashboard.joinToString(",")
+        if (s.backfill != null) p[K.backfill] = s.backfill else p.remove(K.backfill)
     }
 
     private fun putDate(p: MutablePreferences, key: Preferences.Key<String>, value: LocalDate?) {

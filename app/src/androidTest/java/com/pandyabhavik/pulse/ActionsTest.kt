@@ -178,7 +178,7 @@ class ActionsTest {
         for ((i, kcal) in listOf(500, 1000, 1500).withIndex()) {
             app.node("whatif_slider").performSemanticsAction(SemanticsActions.SetProgress) { it(kcal.toFloat()) }
             app.idle()
-            app.waitText("${n(kcal)} kcal under", substring = true)
+            app.waitText("${n(kcal)} kcal more", substring = true)
             val date = checkNotNull(Forecaster.whatIf(TestData.PROFILE, trend, today, kcal))
             app.assertTagShows("whatif_result", F.date(date, today))
             results += app.textOf("whatif_result")
@@ -244,7 +244,7 @@ class ActionsTest {
         assertEquals(expected, s.streak)
         assertTrue("one over day mustn't reset the streak (was ${s.streak})", s.streak > 2)
         app.expand("balance_ring", "streak_chip")
-        app.assertTagShows("streak_chip", "${s.streak} days under in a row")
+        app.assertTagShows("streak_chip", "${s.streak} days in a row")
         app.assertNotClipped("streak_chip")
         shot("53-forgiving-streak")
     }
@@ -256,13 +256,14 @@ class ActionsTest {
         app.open(Scene.UNDER)
         app.waitTag("dashboard")
         assertEquals(com.pandyabhavik.pulse.data.Settings.DEFAULT_DASHBOARD, app.settings().dashboard)
-        assertTrue(app.exists("dash_burned"))
+        assertTrue(app.exists("dash_sleep"))
         assertFalse(app.exists("dash_hrv"))
         app.click("dashboard_edit")
         app.waitTag("dashboard_sheet")
         shot("54-dashboard-customize")
-        // Drop Burned, add HRV and distance.
-        app.click("dash_opt_burned")
+        // Drop Sleep, add HRV and distance.
+        app.scrollTo("dash_opt_sleep")
+        app.click("dash_opt_sleep")
         app.scrollTo("dash_opt_distance")
         app.click("dash_opt_distance")
         app.scrollTo("dash_opt_hrv")
@@ -270,17 +271,17 @@ class ActionsTest {
         app.scrollTo("dashboard_save")
         app.click("dashboard_save")
         app.waitGone("dashboard_sheet")
-        val want = listOf("calories", "steps", "weight", "resting_hr", "sleep", "distance", "hrv")
+        val want = listOf("calories", "left_to_eat", "steps", "weight", "in_2_weeks", "resting_hr", "burned", "distance", "hrv")
         app.waitFor("the dashboard choice to be saved") { app.settings().dashboard == want }
         app.waitTag("dash_hrv")
-        assertFalse(app.exists("dash_burned"))
+        assertFalse(app.exists("dash_sleep"))
         app.assertTagShows("dash_hrv", "${app.state().history.take(7).firstNotNullOf { it.hrvMs }} ms")
         app.assertNoneClipped(listOf("dash_hrv", "dash_distance", "dash_calories"))
         shot("55-dashboard-customized")
 
         app.relaunch()
         app.waitTag("dash_hrv")
-        assertFalse(app.exists("dash_burned"))
+        assertFalse(app.exists("dash_sleep"))
 
         // Reset puts the default six back.
         app.click("dashboard_edit")
@@ -290,6 +291,6 @@ class ActionsTest {
         app.scrollTo("dashboard_save")
         app.click("dashboard_save")
         app.waitFor("the default dashboard to be back") { app.settings().dashboard == com.pandyabhavik.pulse.data.Settings.DEFAULT_DASHBOARD }
-        app.waitTag("dash_burned")
+        app.waitTag("dash_sleep")
     }
 }

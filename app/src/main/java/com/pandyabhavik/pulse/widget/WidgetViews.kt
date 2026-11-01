@@ -206,8 +206,8 @@ internal fun balanceColor(s: HomeState): Color = when {
 
 internal fun balanceLabel(s: HomeState, short: Boolean): String = when {
     s.balance == null -> "no food yet"
-    s.isOver -> if (short) "over" else "kcal over"
-    else -> if (short) "under" else "kcal under"
+    s.isOver -> if (short) "more eaten" else "kcal more eaten"
+    else -> if (short) "more burned" else "kcal more burned"
 }
 
 internal fun stepsText(s: HomeState): String = "${grouped(s.liveSteps)} steps"

@@ -93,12 +93,12 @@ object Motivation {
 
     /** The calm line for an over day, e.g. "One day over doesn't move the trend much. Your 7-day average is still 410 kcal under." */
     fun spillLine(overBy: Int, avg7: Int?): String {
-        val first = "One day over doesn't move the trend much."
+        val first = "One day of eating more than you burned doesn't move the trend much."
         return when {
             avg7 == null -> "$first Tomorrow is a fresh start."
-            avg7 > 0 -> "$first Your 7-day average is still ${Format.int(avg7)} kcal under."
-            avg7 == 0 -> "$first Your 7-day average is right at even, so one lighter day tips it back under."
-            else -> "$first A couple of lighter days will bring your 7-day average back under."
+            avg7 > 0 -> "$first Over the last 7 days you still burned ${Format.int(avg7)} kcal a day more than you ate."
+            avg7 == 0 -> "$first Your last 7 days are right at even, so one lighter day tips it back."
+            else -> "$first A couple of lighter days will bring your last 7 days back to burning more than you eat."
         }
     }
 
@@ -145,14 +145,14 @@ object Motivation {
                 "Nothing in MyFitnessPal yet today. Log when you can and Pulse will show your balance."
         }
         if (balance > 0) {
-            val title = if (streak >= 2) "${Format.int(balance)} kcal under, day $streak of your streak"
-            else "${Format.int(balance)} kcal under so far"
+            val title = if (streak >= 2) "Burned ${Format.int(balance)} kcal more than eaten, day $streak of your streak"
+            else "Burned ${Format.int(balance)} kcal more than eaten so far"
             val room = (balance - EVENING_KEEP_KCAL) / 50 * 50
             val body = if (room >= 100) "You have room for a ${Format.int(room)} kcal snack and still keep a solid deficit."
-            else "You're under for the day. A calm evening keeps it that way."
+            else "You've burned more than you've eaten today. A calm evening keeps it that way."
             return title to body
         }
-        val title = if (balance == 0) "Right at even so far" else "${Format.int(-balance)} kcal over so far"
+        val title = if (balance == 0) "Right at even so far" else "Eaten ${Format.int(-balance)} kcal more than burned so far"
         val body = if (streak >= 1) "One day doesn't move the trend much, and your streak is still alive. Tomorrow is a fresh start."
         else "One day doesn't move the trend much. Tomorrow is a fresh start."
         return title to body
@@ -267,7 +267,7 @@ object Motivation {
                 "dinner" to meals.sumOf { it.dinner },
                 "snacks" to meals.sumOf { it.snacks },
             ).filter { it.second > 0 }.maxByOrNull { it.second }?.first ?: "dinner"
-            return "${day}s were your over days $times. Plan $day $meal by $before night."
+            return "${day}s were the days you ate more than you burned $times. Plan $day $meal by $before night."
         }
         val steps = week.mapNotNull { it.steps }
         if (steps.isNotEmpty() && steps.average() < p.stepGoal) {

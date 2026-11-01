@@ -79,6 +79,8 @@ import androidx.compose.material.icons.rounded.ExpandMore
 import java.util.Locale
 import java.time.LocalDate
 import com.pandyabhavik.pulse.core.DayLog
+import com.pandyabhavik.pulse.core.TwoWeeks
+import com.pandyabhavik.pulse.core.Budget
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.rounded.Circle
 import kotlin.math.roundToInt
@@ -271,7 +273,7 @@ private fun BalanceCard(s: HomeState, onClick: () -> Unit, modifier: Modifier = 
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    if (over) "kcal over" else "kcal under",
+                    F.balanceWords(over),
                     style = T.label.copy(fontSize = 17.sp, color = color),
                     maxLines = 1,
                     modifier = Modifier.padding(bottom = 7.dp).testTag("balance_label"),
@@ -534,14 +536,14 @@ private fun CaloriesSection(s: HomeState, onClick: () -> Unit) {
     val d = s.today
     Section("Calories", Icons.Rounded.LocalFireDepartment, C.under, "balance_ring") {
         if (balance != null) {
-            BigValue(F.n(shown), if (s.isOver) "kcal over" else "kcal under", color, "balance_value", "balance_label")
+            BigValue(F.n(shown), F.balanceWords(s.isOver), color, "balance_value", "balance_label")
             Details {
             // Eaten as a share of burned: the empty part is the deficit; full and red means over.
             val burned = s.burned ?: 0
             val frac = if (burned > 0) (s.eaten ?: 0).toFloat() / burned else 0f
             GlowBar(frac, listOf(if (s.isOver) C.over else C.food), height = 8.dp, glow = false)
             Text(
-                if (s.isOver) "Eaten more than burned" else "${F.n(balance)} kcal left before you'd be over",
+                if (s.isOver) "You've eaten ${F.n(-balance)} kcal more than you burned so far" else "You can eat ${F.n(balance)} kcal more and still not out-eat your burn",
                 style = T.small,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -556,6 +558,7 @@ private fun CaloriesSection(s: HomeState, onClick: () -> Unit) {
             )
         }
         Details {
+        BudgetBlock(s)
         FieldRow(
             "Burned",
             s.burned?.let { "${F.n(it)} kcal" } ?: "—",
@@ -592,11 +595,11 @@ private fun CaloriesSection(s: HomeState, onClick: () -> Unit) {
             },
         )
         FieldRow(
-            "Streak",
+            "Burned more than eaten",
             when (s.streak) {
                 0 -> "Start a streak today"
-                1 -> "1 day under"
-                else -> "${s.streak} days under in a row"
+                1 -> "1 day"
+                else -> "${s.streak} days in a row"
             },
             Modifier.testTag("streak_chip"),
             valueColor = if (s.streak > 0) C.hot else C.mute,
@@ -671,7 +674,7 @@ private fun BodySection(s: HomeState) {
             }
         }
         Details {
-        Spacer(Modifier.height(4.dp))
+        TwoWeekBlock(s)
         FieldRow(
             "Last weigh-in",
             lastWeighIn?.let { "${F.kg(it.weightKg!!)} kg" } ?: "—",
@@ -707,6 +710,132 @@ private fun BodySection(s: HomeState) {
             divider = false,
         )
         }
+    }
+}
+
+/**
+ * Where the last 7 days of eating take the weight in two weeks (gain or loss), then what the scale trend
+ * actually did in each of the last few two-week stretches. Always shows something: with little data it's
+ * an early estimate and says what it's based on.
+ */
+@Composable
+private fun TwoWeekBlock(s: HomeState) {
+    val p = s.profile ?: return
+    val today = s.now.toLocalDate()
+    val o = TwoWeeks.outlook(p, s.history, today)
+    val gain = o.changeKg > 0.05
+    val color = if (gain) C.over else C.under
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp, bottom = 4.dp)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+            .background(C.s2)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .testTag("two_week_outlook"),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("YOUR WEIGHT IN 2 WEEKS", style = T.caps, modifier = Modifier.weight(1f))
+            if (o.early) Text("EARLY ESTIMATE", style = T.caps.copy(color = C.food), modifier = Modifier.testTag("two_week_early"))
+        }
+        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = 4.dp)) {
+            Text(
+                "${F.kg(o.toKg)} kg",
+                style = T.metric.copy(fontSize = 26.sp, lineHeight = 30.sp, letterSpacing = 0.sp, color = color),
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.testTag("two_week_kg"),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                when {
+                    o.changeKg <= -0.05 -> "${F.kg(-o.changeKg)} kg lighter"
+                    gain -> "${F.kg(o.changeKg)} kg heavier"
+                    else -> "about the same"
+                },
+                style = T.body.copy(fontSize = 15.sp, color = color),
+                maxLines = 1,
+                modifier = Modifier.padding(bottom = 3.dp).testTag("two_week_change"),
+            )
+        }
+        val avg = o.avgBalance
+        val why = when (o.basis) {
+            TwoWeeks.Basis.FOOD_AND_SCALE, TwoWeeks.Basis.FOOD -> {
+                val eating = if (avg != null && avg >= 0) "burning ${F.n(avg)} kcal a day more than you eat" else "eating ${F.n(-(avg ?: 0))} kcal a day more than you burn"
+                val days = if (o.foodDays == 1) "yesterday" else "the last ${o.foodDays} days"
+                "If you keep $eating, like $days." +
+                    if (o.basis == TwoWeeks.Basis.FOOD_AND_SCALE) " Checked against your scale." else " Gets sharper with each day of food logged."
+            }
+            TwoWeeks.Basis.SCALE -> "From your weigh-ins so far. Log food in MyFitnessPal and it follows what you eat."
+            TwoWeeks.Basis.TODAY -> "From today so far. Tomorrow it uses a full day of food."
+            TwoWeeks.Basis.STARTING_GUESS -> "A starting estimate at the plan's pace (0.75 kg a week). It switches to your real eating after a full day of food."
+        }
+        Text(why, style = T.small.copy(fontSize = 13.sp), modifier = Modifier.padding(top = 2.dp))
+    }
+    val periods = TwoWeeks.periods(s.history, today)
+    if (periods.isEmpty()) {
+        FieldRow("Last 2 weeks", "after 2 weigh-ins", Modifier.testTag("two_week_last"), valueColor = C.mute)
+    }
+    periods.forEachIndexed { i, per ->
+        val label = when {
+            i == 0 && per.days < TwoWeeks.DAYS -> "Last ${per.days} day${if (per.days == 1) "" else "s"}"
+            i == 0 -> "Last 2 weeks"
+            else -> "${F.date(per.start, today)} to ${F.date(per.end, today)}"
+        }
+        FieldRow(
+            label,
+            when {
+                per.changeKg <= -0.05 -> "${F.kg(-per.changeKg)} kg lost"
+                per.changeKg >= 0.05 -> "${F.kg(per.changeKg)} kg gained"
+                else -> "steady"
+            },
+            if (i == 0) Modifier.testTag("two_week_last") else Modifier,
+            valueColor = if (per.changeKg >= 0.05) C.over else C.under,
+        )
+    }
+}
+
+/**
+ * How much more can be eaten today and still lose at the plan's pace: the usual daily burn minus 825.
+ */
+@Composable
+private fun BudgetBlock(s: HomeState) {
+    val p = s.profile ?: return
+    val b = Budget.today(p, s.history, s.now.toLocalDate(), s.trendKg)
+    val past = b.left < 0
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp, bottom = 4.dp)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+            .background(C.s2)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .testTag("food_budget"),
+    ) {
+        Text("LEFT TO EAT TODAY", style = T.caps)
+        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = 4.dp)) {
+            Text(
+                F.n(abs(b.left)),
+                style = T.metric.copy(fontSize = 26.sp, lineHeight = 30.sp, letterSpacing = 0.sp, color = if (past) C.over else C.under),
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.testTag("budget_left"),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (past) "kcal past today's budget" else "kcal to stay on pace",
+                style = T.body.copy(fontSize = 15.sp, color = if (past) C.over else C.soft),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(bottom = 3.dp),
+            )
+        }
+        val burnFrom = if (b.burnDays > 0) "you usually burn ${F.n(b.burn)} kcal a day" else "you burn about ${F.n(b.burn)} kcal a day (estimated until Fitbit has a full day)"
+        Text(
+            "Budget ${F.n(b.budget)} kcal: $burnFrom, minus ${F.n(Budget.PACE_KCAL)} to lose 0.75 kg a week. Eaten ${F.n(b.eaten)}.",
+            style = T.small.copy(fontSize = 13.sp),
+            modifier = Modifier.padding(top = 2.dp),
+        )
     }
 }
 
@@ -851,7 +980,7 @@ private fun RecapCard(r: WeeklyRecap, committed: Boolean) {
         LineNote(Icons.AutoMirrored.Rounded.TrendingDown, C.under) { Text(r.headline, style = T.body.copy(fontSize = 13.5.sp)) }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            RecapStat("${r.daysUnder}/7", "days under", C.under, Modifier.weight(1f))
+            RecapStat("${r.daysUnder}/7", "days burned more", C.under, Modifier.weight(1f))
             RecapStat(F.compact(r.totalSteps), "steps", C.steps, Modifier.weight(1f))
             RecapStat(
                 r.bestDayBalance?.let { F.n(it) } ?: "—",
@@ -862,7 +991,7 @@ private fun RecapCard(r: WeeklyRecap, committed: Boolean) {
         }
         Spacer(Modifier.height(12.dp))
         Lbl("This week's one thing", Icons.Rounded.Flag, C.wt)
-        Text("Beat last week: ${r.focusDaysUnder} days under.", style = T.h3.copy(fontSize = 17.sp), modifier = Modifier.padding(top = 6.dp))
+        Text("Beat last week: ${r.focusDaysUnder} days burning more than you ate.", style = T.h3.copy(fontSize = 17.sp), modifier = Modifier.padding(top = 6.dp))
         Text(r.focusTip, style = T.small.copy(fontSize = 13.sp), modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(12.dp))
         if (committed) {

@@ -131,13 +131,17 @@ class PulseRepository(
             HealthStatus.AVAILABLE -> Unit
         }
         val granted = source.granted()
-        if (source.permissions.none { it in granted && !it.endsWith(BACKGROUND_SUFFIX) }) {
+        if (source.permissions.none { it in granted && !it.endsWith(BACKGROUND_SUFFIX) && !it.endsWith(HISTORY_SUFFIX) }) {
             lastError = "Pulse has no Health Connect access yet"
             return false
         }
         val today = today()
-        val first = !store.current().firstSyncDone
-        val from = if (first) today.minusDays(HISTORY_DAYS - 1) else today.minusDays(RECENT_DAYS - 1)
+        // A full read the first time, and again whenever more history becomes readable (the history
+        // permission was just allowed, or Pulse reads further back than before): early trends need it.
+        val backfill = "$FETCH_DAYS-${granted.any { it.endsWith(HISTORY_SUFFIX) }}"
+        val settingsNow = store.current()
+        val first = !settingsNow.firstSyncDone || settingsNow.backfill != backfill
+        val from = if (first) today.minusDays(FETCH_DAYS - 1) else today.minusDays(RECENT_DAYS - 1)
         val logs = source.readDays(from, today, zone())
             .filter { !it.date.isBefore(from) && !it.date.isAfter(today) }
         val problems = source.problems
@@ -196,7 +200,7 @@ class PulseRepository(
             return false
         }
         val at = clock().instant()
-        store.update { it.copy(firstSyncDone = true, lastSync = at) }
+        store.update { it.copy(firstSyncDone = true, lastSync = at, backfill = backfill) }
         return true
     }
 
@@ -416,8 +420,12 @@ class PulseRepository(
     companion object {
         private const val TAG = "PulseRepository"
         const val HISTORY_DAYS = 90L
+
+        /** How far back a full read goes: a year, so trends have something to start from on day one. */
+        const val FETCH_DAYS = 365L
         const val RECENT_DAYS = 3L
         private const val READ_TIMEOUT_MS = 45_000L
         private const val BACKGROUND_SUFFIX = "READ_HEALTH_DATA_IN_BACKGROUND"
+        private const val HISTORY_SUFFIX = "READ_HEALTH_DATA_HISTORY"
     }
 }

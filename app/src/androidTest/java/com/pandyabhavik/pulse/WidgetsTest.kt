@@ -178,19 +178,19 @@ class WidgetsTest {
                 Moment(
                     Scene.UNDER, "80-widgets-$screen-under",
                     mapOf(
-                        today to listOf("$under", "kcal under", "$steps steps"),
+                        today to listOf("$under", "kcal more burned", "$steps steps"),
                         journey to listOf("JOURNEY", "kg trend"),
                         milestone to listOf("kg"),
-                        full to listOf("$under", "under", steps, "WEIGHT"),
+                        full to listOf("$under", "more burned", steps, "WEIGHT"),
                     ),
                 ),
                 Moment(
                     Scene.OVER, "81-widgets-$screen-over",
                     mapOf(
-                        today to listOf("$over", "kcal over"),
+                        today to listOf("$over", "kcal more eaten"),
                         journey to listOf("kg trend"),
                         milestone to listOf("kg"),
-                        full to listOf("$over", "over", steps),
+                        full to listOf("$over", "more eaten", steps),
                     ),
                 ),
                 Moment(

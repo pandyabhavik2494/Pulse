@@ -144,7 +144,7 @@ private fun WeekSummary(s: HomeState) {
                 } else {
                     Metric(
                         F.n(abs(a)),
-                        if (a >= 0) "kcal under / day" else "kcal over / day",
+                        if (a >= 0) "kcal a day more burned" else "kcal a day more eaten",
                         valueStyle = T.metric.glow(if (a >= 0) C.under else C.over, 24f),
                         modifier = Modifier.padding(top = 0.dp),
                     )
@@ -364,7 +364,7 @@ private fun MonthSummary(s: HomeState, month: YearMonth) {
                 if (withBalance.isEmpty()) {
                     Text("No logged days", style = T.small, modifier = Modifier.padding(top = 6.dp))
                 } else {
-                    Metric("$under", "of ${withBalance.size} days under", valueStyle = T.metric.glow(C.under, 24f))
+                    Metric("$under", "of ${withBalance.size} days burned more", valueStyle = T.metric.glow(C.under, 24f))
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
@@ -391,7 +391,7 @@ private fun DayDetail(s: HomeState, date: LocalDate, inCard: Boolean) {
         Lbl(F.dayShort(date))
         val b = d?.balance
         if (b != null) {
-            Metric(F.n(abs(b)), if (b >= 0) "kcal under" else "kcal over", valueStyle = T.metric.glow(if (b >= 0) C.under else C.over, 24f))
+            Metric(F.n(abs(b)), if (b >= 0) "kcal more burned" else "kcal more eaten", valueStyle = T.metric.glow(if (b >= 0) C.under else C.over, 24f))
         } else {
             Metric("—", if (d?.eaten == null) "no food logged" else "no burn synced", valueStyle = T.metric.copy(color = C.mute))
         }

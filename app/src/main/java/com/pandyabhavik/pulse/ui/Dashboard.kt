@@ -73,20 +73,25 @@ private fun hm(min: Int) = "${min / 60}h ${min % 60}m"
 val DASH_TILES: List<DashTile> = listOf(
     DashTile("calories", "Calories", "Calories", C.under) { s ->
         val b = s.balance ?: return@DashTile null
-        DashValue(F.n(abs(b)), if (b < 0) "kcal over" else "kcal under", if (b < 0) C.over else C.under)
+        DashValue(F.n(abs(b)), F.balanceWords(b < 0), if (b < 0) C.over else C.under)
+    },
+    DashTile("left_to_eat", "Left to eat", "Calories", C.under) { s ->
+        val p = s.profile ?: return@DashTile null
+        val b = com.pandyabhavik.pulse.core.Budget.today(p, s.history, s.now.toLocalDate(), s.trendKg)
+        if (b.left < 0) DashValue(F.n(-b.left), "kcal past budget", C.over) else DashValue(F.n(b.left), "kcal on pace")
     },
     DashTile("burned", "Burned", "Calories", C.food) { s -> s.burned?.let { DashValue(F.n(it), "kcal so far") } },
     DashTile("eaten", "Eaten", "Calories", C.food) { s -> s.eaten?.let { DashValue(F.n(it), "kcal logged") } },
     DashTile("active", "Active", "Calories", C.hot) { s -> s.active?.let { DashValue(F.n(it), "active kcal") } },
     DashTile("avg7", "7-day balance", "Calories", C.under) { s ->
         val a = s.avg7 ?: return@DashTile null
-        DashValue(F.n(abs(a)), if (a < 0) "kcal/day over" else "kcal/day under", if (a < 0) C.over else C.under)
+        DashValue(F.n(abs(a)), if (a < 0) "a day more eaten" else "a day more burned", if (a < 0) C.over else C.under)
     },
     DashTile("protein", "Protein", "Calories", C.food) { s -> s.today.proteinG?.let { DashValue("$it", "g protein") } },
     DashTile("carbs", "Carbs", "Calories", C.food) { s -> s.today.carbsG?.let { DashValue("$it", "g carbs") } },
     DashTile("fat", "Fat", "Calories", C.food) { s -> s.today.fatG?.let { DashValue("$it", "g fat") } },
     DashTile("water", "Water", "Calories", C.steps) { s -> s.today.waterMl?.let { DashValue(d1(it / 1000.0), "litres") } },
-    DashTile("streak", "Streak", "Calories", C.under) { s -> DashValue("${s.streak}", if (s.streak == 1) "day under" else "days under") },
+    DashTile("streak", "Streak", "Calories", C.under) { s -> DashValue("${s.streak}", if (s.streak == 1) "day burned more" else "days burned more") },
 
     DashTile("steps", "Steps", "Activity", C.steps) { s -> DashValue(F.n(s.liveSteps), "of ${F.n(s.profile?.stepGoal ?: 10_000)}") },
     DashTile("distance", "Distance", "Activity", C.steps) { s ->
@@ -106,6 +111,11 @@ val DASH_TILES: List<DashTile> = listOf(
         val p = s.profile ?: return@DashTile null
         val kg = s.trendKg ?: return@DashTile null
         DashValue(F.kg((kg - p.goalKg).coerceAtLeast(0.0)), "kg to ${F.kgShort(p.goalKg)}")
+    },
+    DashTile("in_2_weeks", "In 2 weeks", "Weight", C.wt2) { s ->
+        val p = s.profile ?: return@DashTile null
+        val o = com.pandyabhavik.pulse.core.TwoWeeks.outlook(p, s.history, s.now.toLocalDate())
+        DashValue(F.kg(o.toKg), "kg · ${F.signedKg(o.changeKg)}${if (o.early) " · early" else ""}", if (o.changeKg > 0.05) C.over else C.under)
     },
     DashTile("goal_date", "Goal date", "Weight", C.wt2) { s ->
         s.forecast?.goal?.projected?.let { DashValue(F.date(it, s.now.toLocalDate()), "at this pace") }

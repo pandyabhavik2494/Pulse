@@ -172,12 +172,12 @@ private fun GoalCard(s: HomeState, showLine: Boolean = true) {
 @Composable
 private fun JourneyLine(s: HomeState, includeAverage: Boolean) {
     val text = when {
-        stalled(s) -> "Get back under to put dates on the calendar."
+        stalled(s) -> "Burn more than you eat for a few days to put dates on the calendar."
         s.journeyLine != null -> s.journeyLine + (
-            if (includeAverage) s.forecast?.avgDeficit?.takeIf { it > 0 }?.let { " You're averaging ${F.n(it)} kcal under a day." } ?: "" else ""
+            if (includeAverage) s.forecast?.avgDeficit?.takeIf { it > 0 }?.let { " You're burning ${F.n(it)} kcal a day more than you eat." } ?: "" else ""
             )
         s.trendKg == null -> "Weigh in a few mornings and your dates appear here."
-        else -> "Every day under nudges your dates a little closer."
+        else -> "Every day you burn more than you eat nudges your dates a little closer."
     }
     LineNote(Icons.AutoMirrored.Rounded.TrendingDown, if (stalled(s)) C.food else C.under) {
         Text(text, style = T.body.copy(fontSize = 13.5.sp), modifier = Modifier.testTag("journey_line"))
@@ -308,9 +308,9 @@ private fun WhatIfCard(s: HomeState) {
         Lbl("What if", Icons.Rounded.Tune, C.mute)
         Text(
             buildAnnotatedString {
-                append("If I average ")
-                withStyle(SpanStyle(color = C.under, fontWeight = FontWeight(800))) { append("${F.n(kcal)} kcal under") }
-                append(" a day")
+                append("If I burn ")
+                withStyle(SpanStyle(color = C.under, fontWeight = FontWeight(800))) { append("${F.n(kcal)} kcal more") }
+                append(" than I eat a day")
             },
             style = T.label.copy(fontWeight = FontWeight(600)),
             modifier = Modifier.padding(top = 8.dp),

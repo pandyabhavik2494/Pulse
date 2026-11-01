@@ -113,7 +113,7 @@ class FlexModeTest {
         app.open(Scene.OVER)
         val hinge2 = halfOpen()
         app.assertTagShows("balance_value", n(TestData.OVER_BY), substring = false)
-        app.assertTagShows("balance_label", "kcal over")
+        app.assertTagShows("balance_label", "eaten more than burned")
         assertAbove("balance_value", hinge2)
         app.shot("74-flex-today-over")
     }

@@ -376,12 +376,15 @@ class HealthGateway(private val context: Context) : HealthSource {
         val READ_RESTING_HEART_RATE = HealthPermission.getReadPermission(RestingHeartRateRecord::class)
         const val READ_IN_BACKGROUND = "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
 
+        /** Lets Pulse read data from before it was first given access (otherwise Health Connect stops at 30 days). */
+        const val READ_HISTORY = "android.permission.health.READ_HEALTH_DATA_HISTORY"
+
         /** The data types. Background reading is asked for too, but isn't needed to sync in the app. */
         val DATA = setOf(
             READ_STEPS, READ_TOTAL_CALORIES, READ_ACTIVE_CALORIES, READ_NUTRITION, READ_WEIGHT, READ_SLEEP,
             READ_HEART_RATE, READ_RESTING_HEART_RATE, READ_DISTANCE, READ_FLOORS, READ_EXERCISE, READ_HYDRATION,
             READ_BODY_FAT, READ_LEAN_MASS, READ_HRV, READ_SPO2, READ_BREATHING, READ_VO2_MAX,
         )
-        val ALL = DATA + READ_IN_BACKGROUND
+        val ALL = DATA + READ_IN_BACKGROUND + READ_HISTORY
     }
 }
