@@ -166,7 +166,7 @@ private fun DashCell(tile: DashTile, s: HomeState, modifier: Modifier = Modifier
             softWrap = false,
             modifier = Modifier.padding(top = 4.dp),
         )
-        Text(v?.unit ?: "no data", style = T.small, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(v?.unit ?: "no data", style = T.small, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
