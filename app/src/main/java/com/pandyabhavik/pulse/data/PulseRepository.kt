@@ -152,6 +152,7 @@ class PulseRepository(
                     hrAvg = n.hrAvg ?: o.hrAvg,
                     hrMin = n.hrMin ?: o.hrMin,
                     hrMax = n.hrMax ?: o.hrMax,
+                    distanceM = n.distanceM ?: o.distanceM,
                 )
             }
             dao.upsertDays(merged.map { it.toEntity() })

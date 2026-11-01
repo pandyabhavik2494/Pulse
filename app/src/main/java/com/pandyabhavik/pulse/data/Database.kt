@@ -40,6 +40,7 @@ data class DayEntity(
     val hrAvg: Int? = null,
     val hrMin: Int? = null,
     val hrMax: Int? = null,
+    val distanceM: Int? = null,
 ) {
     fun toDayLog() = DayLog(
         date = LocalDate.parse(date),
@@ -55,6 +56,7 @@ data class DayEntity(
         hrAvg = hrAvg,
         hrMin = hrMin,
         hrMax = hrMax,
+        distanceM = distanceM,
     )
 }
 
@@ -75,6 +77,7 @@ fun DayLog.toEntity() = DayEntity(
     hrAvg = hrAvg,
     hrMin = hrMin,
     hrMax = hrMax,
+    distanceM = distanceM,
 )
 
 @Dao
@@ -117,10 +120,10 @@ abstract class PulseDatabase : RoomDatabase() {
         fun create(context: Context, name: String = "pulse.db"): PulseDatabase =
             Room.databaseBuilder(context, PulseDatabase::class.java, name).addMigrations(V1_TO_V2).build()
 
-        /** Version 2 adds heart rate. Old days keep their data; the new columns start empty. */
+        /** Version 2 adds heart rate and distance. Old days keep their data; the new columns start empty. */
         private val V1_TO_V2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                for (c in listOf("restingHr", "hrAvg", "hrMin", "hrMax")) db.execSQL("ALTER TABLE days ADD COLUMN $c INTEGER")
+                for (c in listOf("restingHr", "hrAvg", "hrMin", "hrMax", "distanceM")) db.execSQL("ALTER TABLE days ADD COLUMN $c INTEGER")
             }
         }
     }

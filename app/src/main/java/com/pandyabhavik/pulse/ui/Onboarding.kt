@@ -248,7 +248,7 @@ private fun ColumnScope.ConnectStep(
     Text("Connect your data", style = T.big.copy(fontSize = 30.sp, lineHeight = 33.sp))
     Text("Pulse reads from Health Connect. Nothing leaves your phone.", style = T.body)
     Column {
-        PermRow("Steps · Fitbit", allowed("READ_STEPS"))
+        PermRow("Steps and distance · Fitbit", allowed("READ_STEPS", "READ_DISTANCE"))
         PermRow("Calories burned · Fitbit", allowed("READ_TOTAL_CALORIES_BURNED", "READ_ACTIVE_CALORIES_BURNED"))
         PermRow("Food · MyFitnessPal", allowed("READ_NUTRITION"))
         PermRow("Weight · scale", allowed("READ_WEIGHT"))

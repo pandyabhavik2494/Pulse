@@ -48,6 +48,8 @@ data class DayLog(
     val hrAvg: Int? = null,
     val hrMin: Int? = null,
     val hrMax: Int? = null,
+    /** Distance walked or run, metres. */
+    val distanceM: Int? = null,
 ) {
     /** Burned minus eaten. Positive = under (deficit), negative = over (spill-over). Null if either side is missing. */
     val balance: Int? get() = if (burnedTotal != null && eaten != null) burnedTotal - eaten else null

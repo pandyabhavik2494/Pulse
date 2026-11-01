@@ -147,6 +147,8 @@ object TestData {
             hrAvg = 76 + i % 5,
             hrMin = 56 + i % 4,
             hrMax = 118 + (i * 7) % 30,
+            // About 0.76 m a stride.
+            distanceM = steps * 76 / 100,
         )
     }
 

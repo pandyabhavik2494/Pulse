@@ -526,6 +526,14 @@ private fun StepsSection(s: HomeState) {
         Spacer(Modifier.height(4.dp))
         val left = goal - s.liveSteps
         FieldRow("To go", if (left > 0) F.n(left) else "Goal done", valueColor = if (left > 0) C.ink else C.under)
+        val metres = s.today.distanceM
+        FieldRow(
+            "Distance",
+            metres?.let { String.format(java.util.Locale.US, "%.2f mi", it / 1609.344) } ?: "—",
+            Modifier.testTag("distance_value"),
+            valueColor = if (metres == null) C.mute else C.ink,
+            note = metres?.let { String.format(java.util.Locale.US, "(%.1f km)", it / 1000.0) },
+        )
         val avg = s.history.drop(1).take(7).map { it.steps }.avgOrNull()
         FieldRow("7-day average", avg?.let { F.n(it) } ?: "—", valueColor = if (avg == null) C.mute else C.ink, divider = false)
     }

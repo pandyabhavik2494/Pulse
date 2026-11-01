@@ -7,6 +7,7 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.aggregate.AggregateMetric
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.MealType
 import androidx.health.connect.client.records.NutritionRecord
@@ -102,6 +103,9 @@ class HealthGateway(private val context: Context) : HealthSource {
         val active = if (READ_ACTIVE_CALORIES in granted) part("Active calories", none, failed) {
             daily(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL, from, to).mapValues { it.value.inKilocalories.roundToInt() }
         } else none
+        val distance = if (READ_DISTANCE in granted) part("Distance", none, failed) {
+            daily(DistanceRecord.DISTANCE_TOTAL, from, to).mapValues { it.value.inMeters.roundToInt() }
+        } else none
         val hrAvg = if (READ_HEART_RATE in granted) part("Heart rate", none, failed) {
             daily(HeartRateRecord.BPM_AVG, from, to).mapValues { it.value.toInt() }
         } else none
@@ -176,6 +180,7 @@ class HealthGateway(private val context: Context) : HealthSource {
                 hrAvg = hrAvg[d],
                 hrMin = hrMin[d],
                 hrMax = hrMax[d],
+                distanceM = distance[d],
             )
             // Dates with nothing at all are left out; the repository treats a missing date as "no data".
             if (log != DayLog(d)) out += log
@@ -253,6 +258,7 @@ class HealthGateway(private val context: Context) : HealthSource {
         val READ_NUTRITION = HealthPermission.getReadPermission(NutritionRecord::class)
         val READ_WEIGHT = HealthPermission.getReadPermission(WeightRecord::class)
         val READ_SLEEP = HealthPermission.getReadPermission(SleepSessionRecord::class)
+        val READ_DISTANCE = HealthPermission.getReadPermission(DistanceRecord::class)
         val READ_HEART_RATE = HealthPermission.getReadPermission(HeartRateRecord::class)
         val READ_RESTING_HEART_RATE = HealthPermission.getReadPermission(RestingHeartRateRecord::class)
         const val READ_IN_BACKGROUND = "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
@@ -260,7 +266,7 @@ class HealthGateway(private val context: Context) : HealthSource {
         /** The data types. Background reading is asked for too, but isn't needed to sync in the app. */
         val DATA = setOf(
             READ_STEPS, READ_TOTAL_CALORIES, READ_ACTIVE_CALORIES, READ_NUTRITION, READ_WEIGHT, READ_SLEEP,
-            READ_HEART_RATE, READ_RESTING_HEART_RATE,
+            READ_HEART_RATE, READ_RESTING_HEART_RATE, READ_DISTANCE,
         )
         val ALL = DATA + READ_IN_BACKGROUND
     }
