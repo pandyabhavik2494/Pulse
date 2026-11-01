@@ -136,9 +136,11 @@ val DASH_TILES: List<DashTile> = listOf(
     DashTile("lean", "Lean mass", "Weight", C.wt) { s -> recent(s) { it.leanKg }?.let { (v, w) -> DashValue(d1(v), "kg lean$w") } },
 
     DashTile("resting_hr", "Heart", "Heart", C.over) { s ->
-        recent(s) { it.restingHr }?.let { (v, w) -> DashValue("$v", "bpm resting$w") }
+        s.today.hrLatest?.let { DashValue("$it", "bpm at ${s.today.hrLatestAt ?: "—"}") }
+            ?: recent(s) { it.restingHr }?.let { (v, w) -> DashValue("$v", "bpm resting$w") }
             ?: s.today.hrAvg?.let { DashValue("$it", "bpm average") }
     },
+    DashTile("resting_only", "Resting heart", "Heart", C.over) { s -> recent(s) { it.restingHr }?.let { (v, w) -> DashValue("$v", "bpm resting$w") } },
     DashTile("avg_hr", "Avg heart", "Heart", C.over) { s -> s.today.hrAvg?.let { DashValue("$it", "bpm average") } },
     DashTile("hrv", "HRV", "Heart", C.over) { s -> recent(s) { it.hrvMs }?.let { (v, w) -> DashValue("$v", "ms$w") } },
     DashTile("spo2", "Blood oxygen", "Heart", C.over) { s -> recent(s) { it.spo2Pct }?.let { (v, w) -> DashValue("${v.roundToInt()}", "%$w") } },

@@ -48,6 +48,9 @@ data class DayLog(
     val hrAvg: Int? = null,
     val hrMin: Int? = null,
     val hrMax: Int? = null,
+    /** The newest heart-rate reading of the day and its time ("18:32"). */
+    val hrLatest: Int? = null,
+    val hrLatestAt: String? = null,
     /** Distance walked or run, metres. */
     val distanceM: Int? = null,
     /** Food details from MyFitnessPal: grams of carbs, fat, fibre and sugar, milligrams of sodium. */

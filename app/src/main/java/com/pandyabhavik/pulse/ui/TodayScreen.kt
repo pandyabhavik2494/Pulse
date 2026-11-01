@@ -850,19 +850,27 @@ private fun HeartSection(s: HomeState) {
     val anyVitals = latest(s) { it.hrvMs } != null || latest(s) { it.spo2Pct } != null ||
         latest(s) { it.breathingRate } != null || latest(s) { it.vo2Max } != null
     Section("Heart and vitals", Icons.Rounded.Favorite, C.over, "section_heart") {
-        if (resting == null && d.hrAvg == null && !anyVitals) {
+        if (resting == null && d.hrAvg == null && d.hrLatest == null && !anyVitals) {
             EmptyLine("No heart data yet", "It appears here when your Fitbit syncs to Health Connect.")
             return@Section
         }
+        // The big number: the newest reading Fitbit has synced today, else resting, else the day's average.
         when {
+            d.hrLatest != null -> BigValue("${d.hrLatest}", "bpm at ${d.hrLatestAt ?: "—"}", C.over, "heart_latest")
             resting != null -> BigValue("${resting.restingHr}", "bpm resting", C.ink, "heart_resting")
             d.hrAvg != null -> BigValue("${d.hrAvg}", "bpm average", C.ink, "heart_resting")
+            else -> EmptyLine("No heart rate today yet", "It appears when your Fitbit syncs to Health Connect.")
         }
         Details {
-        if (resting != null && resting.date != today) {
+        Spacer(Modifier.height(4.dp))
+        if (d.hrLatest != null || resting == null) FieldRow(
+            "Resting",
+            resting?.let { "${it.restingHr} bpm" } ?: "—",
+            valueColor = if (resting == null) C.mute else C.ink,
+            note = resting?.takeIf { it.date != today }?.let { "(${F.date(it.date, today)})" },
+        ) else if (resting.date != today) {
             Text("from ${F.date(resting.date, today)}", style = T.small, modifier = Modifier.padding(bottom = 4.dp))
         }
-        Spacer(Modifier.height(4.dp))
         FieldRow("Average today", d.hrAvg?.let { "$it bpm" } ?: "—", Modifier.testTag("heart_rows"), valueColor = if (d.hrAvg == null) C.mute else C.ink)
         FieldRow(
             "Range today",

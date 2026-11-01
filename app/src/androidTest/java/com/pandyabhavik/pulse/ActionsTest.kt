@@ -309,4 +309,24 @@ class ActionsTest {
         app.scrollTo("data_check_3")
         shot("56-data-check")
     }
+
+    // ---- Heart: newest reading -------------------------------------------------------------------
+
+    @Test
+    fun heartShowsTheNewestReading() {
+        app.open(Scene.UNDER)
+        app.waitTag("heart_resting")
+        val today = TestData.NOW.toLocalDate()
+        TestData.health.days = TestData.daysFor(Scene.UNDER).map {
+            if (it.date == today) it.copy(hrLatest = 81, hrLatestAt = "19:38") else it
+        }
+        assertTrue(runBlocking { app.repo.sync() })
+        app.waitTag("heart_latest")
+        app.assertTagShows("heart_latest", "81", substring = false)
+        app.assertText("bpm at 19:38")
+        app.expand("section_heart", "heart_rows")
+        app.assertText("Resting")
+        app.scrollTo("section_heart")
+        shot("57-heart-latest")
+    }
 }

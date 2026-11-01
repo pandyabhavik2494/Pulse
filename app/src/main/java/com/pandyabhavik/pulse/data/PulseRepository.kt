@@ -212,6 +212,8 @@ class PulseRepository(
                     hrAvg = n.hrAvg ?: o.hrAvg,
                     hrMin = n.hrMin ?: o.hrMin,
                     hrMax = n.hrMax ?: o.hrMax,
+                    hrLatest = n.hrLatest ?: o.hrLatest,
+                    hrLatestAt = n.hrLatestAt ?: o.hrLatestAt,
                     distanceM = n.distanceM ?: o.distanceM,
                     carbsG = n.carbsG ?: o.carbsG,
                     fatG = n.fatG ?: o.fatG,

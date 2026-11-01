@@ -177,12 +177,18 @@ class HealthGateway(private val context: Context) : HealthSource {
             part("Floors", none, failed) { daily(FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL, from, to).mapValues { it.value.roundToInt() } },
             if (raw) part("Floors", none, failed) { rawDaily(FloorsClimbedRecord::class, from, to, zone, { it.startTime }, { it.startZoneOffset }) { it.floors } } else none,
         ) else none
-        val exercise = if (READ_EXERCISE in granted) part("Exercise", none, failed) {
-            daily(ExerciseSessionRecord.EXERCISE_DURATION_TOTAL, from, to).mapValues { it.value.toMinutes().toInt() }
-        } else none
-        val water = if (READ_HYDRATION in granted) part("Water", none, failed) {
-            daily(HydrationRecord.VOLUME_TOTAL, from, to).mapValues { it.value.inMilliliters.roundToInt() }
-        } else none
+        val exercise = if (READ_EXERCISE in granted) best(
+            part("Exercise", none, failed) { daily(ExerciseSessionRecord.EXERCISE_DURATION_TOTAL, from, to).mapValues { it.value.toMinutes().toInt() } },
+            if (raw) part("Exercise", none, failed) { rawDaily(ExerciseSessionRecord::class, from, to, zone, { it.startTime }, { it.startZoneOffset }) { Duration.between(it.startTime, it.endTime).toMinutes().toDouble() } } else none,
+        ) else none
+        val water = if (READ_HYDRATION in granted) best(
+            part("Water", none, failed) { daily(HydrationRecord.VOLUME_TOTAL, from, to).mapValues { it.value.inMilliliters.roundToInt() } },
+            if (raw) part("Water", none, failed) { rawDaily(HydrationRecord::class, from, to, zone, { it.startTime }, { it.startZoneOffset }) { it.volume.inMilliliters } } else none,
+        ) else none
+
+        // Heart rate: from the raw samples when the range is short (the daily totals have the same priority-list
+        // gap as steps), using the app with the most samples that day; the totals fill in older days.
+        val hr = if (READ_HEART_RATE in granted && raw) part("Heart rate", emptyMap(), failed) { heartDays(from, to, zone) } else emptyMap()
         val hrAvg = if (READ_HEART_RATE in granted) part("Heart rate", none, failed) {
             daily(HeartRateRecord.BPM_AVG, from, to).mapValues { it.value.toInt() }
         } else none
@@ -192,9 +198,16 @@ class HealthGateway(private val context: Context) : HealthSource {
         val hrMax = if (READ_HEART_RATE in granted) part("Heart rate", none, failed) {
             daily(HeartRateRecord.BPM_MAX, from, to).mapValues { it.value.toInt() }
         } else none
-        val restingHr = if (READ_RESTING_HEART_RATE in granted) part("Resting heart rate", none, failed) {
+        val restingAgg = if (READ_RESTING_HEART_RATE in granted) part("Resting heart rate", none, failed) {
             daily(RestingHeartRateRecord.BPM_AVG, from, to).mapValues { it.value.toInt() }
         } else none
+        val restingRaw = if (READ_RESTING_HEART_RATE in granted && raw) part("Resting heart rate", none, failed) {
+            readAll(RestingHeartRateRecord::class, TimeRangeFilter.between(from.atStartOfDay(zone).toInstant(), to.plusDays(1).atStartOfDay(zone).toInstant()))
+                .groupBy { it.time.atZone(it.zoneOffset ?: zone).toLocalDate() }
+                .filterKeys { !it.isBefore(from) && !it.isAfter(to) }
+                .mapValues { (_, rs) -> rs.maxBy { it.time }.beatsPerMinute.toInt() }
+        } else none
+        val restingHr = restingAgg + restingRaw
 
         val start = from.atStartOfDay(zone).toInstant()
         val end = to.plusDays(1).atStartOfDay(zone).toInstant()
@@ -288,9 +301,11 @@ class HealthGateway(private val context: Context) : HealthSource {
                 weightKg = weight[d],
                 sleepMinutes = sleep[d],
                 restingHr = restingHr[d],
-                hrAvg = hrAvg[d],
-                hrMin = hrMin[d],
-                hrMax = hrMax[d],
+                hrAvg = hr[d]?.avg ?: hrAvg[d],
+                hrMin = hr[d]?.min ?: hrMin[d],
+                hrMax = hr[d]?.max ?: hrMax[d],
+                hrLatest = hr[d]?.latest,
+                hrLatestAt = hr[d]?.latestAt,
                 distanceM = distance[d],
                 carbsG = f?.carbs?.roundToInt(),
                 fatG = f?.fat?.roundToInt(),
@@ -354,6 +369,32 @@ class HealthGateway(private val context: Context) : HealthSource {
             out[g.startTime.toLocalDate()] = value
         }
         return out
+    }
+
+    /** One day of heart rate from the raw samples. */
+    private class HeartDay(val avg: Int, val min: Int, val max: Int, val latest: Int, val latestAt: String)
+
+    /** Per day: the app with the most samples, its average, lowest, highest and newest reading. */
+    private suspend fun heartDays(from: LocalDate, to: LocalDate, zone: ZoneId): Map<LocalDate, HeartDay> {
+        val range = TimeRangeFilter.between(from.atStartOfDay(zone).toInstant(), to.plusDays(1).atStartOfDay(zone).toInstant())
+        data class Sample(val time: Instant, val offset: ZoneOffset?, val bpm: Long, val origin: String)
+        val samples = readAll(HeartRateRecord::class, range).flatMap { r ->
+            r.samples.map { Sample(it.time, r.startZoneOffset, it.beatsPerMinute, r.metadata.dataOrigin.packageName) }
+        }
+        return samples
+            .groupBy { it.time.atZone(it.offset ?: zone).toLocalDate() }
+            .filterKeys { !it.isBefore(from) && !it.isAfter(to) }
+            .mapValues { (_, day) ->
+                val best = day.groupBy { it.origin }.values.maxBy { it.size }
+                val last = best.maxBy { it.time }
+                HeartDay(
+                    best.map { it.bpm }.average().roundToInt(),
+                    best.minOf { it.bpm }.toInt(),
+                    best.maxOf { it.bpm }.toInt(),
+                    last.bpm.toInt(),
+                    clock(last.time, last.offset, zone),
+                )
+            }
     }
 
     /** "23:41" for [t] in the record's own offset (or [zone]). */

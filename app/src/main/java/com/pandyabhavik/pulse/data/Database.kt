@@ -61,6 +61,8 @@ data class DayEntity(
     val sleepAwakeMin: Int? = null,
     val bedTime: String? = null,
     val wakeTime: String? = null,
+    val hrLatest: Int? = null,
+    val hrLatestAt: String? = null,
 ) {
     fun toDayLog() = DayLog(
         date = LocalDate.parse(date),
@@ -97,6 +99,8 @@ data class DayEntity(
         sleepAwakeMin = sleepAwakeMin,
         bedTime = bedTime,
         wakeTime = wakeTime,
+        hrLatest = hrLatest,
+        hrLatestAt = hrLatestAt,
     )
 }
 
@@ -138,6 +142,8 @@ fun DayLog.toEntity() = DayEntity(
     sleepAwakeMin = sleepAwakeMin,
     bedTime = bedTime,
     wakeTime = wakeTime,
+    hrLatest = hrLatest,
+    hrLatestAt = hrLatestAt,
 )
 
 @Dao
@@ -172,13 +178,21 @@ interface DayDao {
     }
 }
 
-@Database(entities = [DayEntity::class], version = 2, exportSchema = false)
+@Database(entities = [DayEntity::class], version = 3, exportSchema = false)
 abstract class PulseDatabase : RoomDatabase() {
     abstract fun dao(): DayDao
 
     companion object {
         fun create(context: Context, name: String = "pulse.db"): PulseDatabase =
-            Room.databaseBuilder(context, PulseDatabase::class.java, name).addMigrations(V1_TO_V2).build()
+            Room.databaseBuilder(context, PulseDatabase::class.java, name).addMigrations(V1_TO_V2, V2_TO_V3).build()
+
+        /** Version 3 adds the day's newest heart-rate reading and its time. */
+        private val V2_TO_V3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE days ADD COLUMN hrLatest INTEGER")
+                db.execSQL("ALTER TABLE days ADD COLUMN hrLatestAt TEXT")
+            }
+        }
 
         /** Version 2 adds heart rate, distance and the rest of Health Connect's data. Old days keep their data; the new columns start empty. */
         private val V1_TO_V2 = object : Migration(1, 2) {
