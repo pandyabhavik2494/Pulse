@@ -306,6 +306,10 @@ class ActionsTest {
         app.assertTagShows("data_check_0", "Steps")
         app.assertTagShows("data_check_0", "Fitbit")
         app.assertTagShows("data_check_3", "Nothing in 7 days")
+        // Today's steps as Fitbit wrote them, and the same number in Pulse.
+        val steps = n(checkNotNull(app.state().today.steps))
+        app.assertTagShows("data_check_0", "Fitbit $steps")
+        app.assertTagShows("data_check_pulse_0", steps)
         app.scrollTo("data_check_3")
         shot("56-data-check")
     }

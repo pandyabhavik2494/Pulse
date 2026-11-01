@@ -33,4 +33,6 @@ data class TypeCheck(
     val sources: List<String>,
     val latest: java.time.Instant?,
     val error: String? = null,
+    /** Today's value as each app wrote it ("Fitbit" to "8,412"), to compare with what Pulse shows. */
+    val today: List<Pair<String, String>> = emptyList(),
 )

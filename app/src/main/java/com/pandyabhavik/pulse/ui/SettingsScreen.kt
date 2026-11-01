@@ -221,7 +221,7 @@ fun SettingsScreen(s: HomeState) {
             }
 
             // ---- Data check: what Health Connect actually holds, per type, and which app writes it.
-            DataCheckCard()
+            DataCheckCard(s)
 
             // ---- Privacy
             PCard {
@@ -294,7 +294,7 @@ private fun TextLink(text: String, onClick: () -> Unit) {
 
 /** Runs a check of every Health Connect type over the last 7 days and lists what came back. */
 @Composable
-private fun DataCheckCard() {
+private fun DataCheckCard(s: com.pandyabhavik.pulse.data.HomeState) {
     val ui = LocalUi.current
     val checks by ui.vm.checks.collectAsStateWithLifecycle()
     val checking by ui.vm.checking.collectAsStateWithLifecycle()
@@ -331,9 +331,52 @@ private fun DataCheckCard() {
                         }
                     }
                     Text(value, style = T.small.copy(fontSize = 13.sp, color = color))
+                    // Today, as each app wrote it, next to what Pulse shows: the two should match.
+                    if (c.today.isNotEmpty()) {
+                        Text(
+                            "Today: " + c.today.joinToString(" · ") { (app, v) -> "$app $v" },
+                            style = T.small.copy(fontSize = 13.sp, color = C.soft),
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                    if (c.allowed) {
+                        Text(
+                            "Pulse shows: ${pulseShows(c.name, s) ?: "—"}",
+                            style = T.small.copy(fontSize = 13.sp, color = C.mute),
+                            modifier = Modifier.testTag("data_check_pulse_$i"),
+                        )
+                    }
                 }
                 if (i < list.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(C.line))
             }
         }
+    }
+}
+
+/** Today's number in Pulse for a data-check row, in the same units the row uses. */
+private fun pulseShows(name: String, s: com.pandyabhavik.pulse.data.HomeState): String? {
+    val d = s.today
+    fun n(v: Int) = F.n(v)
+    fun d1(v: Double) = String.format(java.util.Locale.US, "%.1f", v)
+    return when (name) {
+        "Steps" -> d.steps?.let(::n)
+        "Calories burned" -> d.burnedTotal?.let { n(it) + " kcal" }
+        "Active calories" -> d.burnedActive?.let { n(it) + " kcal" }
+        "Food" -> d.eaten?.let { n(it) + " kcal" }
+        "Weight" -> d.weightKg?.let { d1(it) + " kg" }
+        "Sleep" -> d.sleepMinutes?.let { "${it / 60}h ${it % 60}m" }
+        "Heart rate" -> d.hrLatest?.let { "$it bpm latest" }
+        "Resting heart rate" -> d.restingHr?.let { "$it bpm" }
+        "Distance" -> d.distanceM?.let { d1(it / 1000.0) + " km" }
+        "Floors" -> d.floors?.let(::n)
+        "Exercise" -> d.exerciseMin?.let { n(it) + " min" }
+        "Water" -> d.waterMl?.let { n(it) + " ml" }
+        "Body fat" -> d.bodyFatPct?.let { d1(it) + "%" }
+        "Lean mass" -> d.leanKg?.let { d1(it) + " kg" }
+        "HRV" -> d.hrvMs?.let { "$it ms" }
+        "Blood oxygen" -> d.spo2Pct?.let { d1(it) + "%" }
+        "Breathing rate" -> d.breathingRate?.let { d1(it) + " /min" }
+        "VO2 max" -> d.vo2Max?.let(::d1)
+        else -> null
     }
 }

@@ -42,6 +42,7 @@ import java.time.temporal.ChronoUnit
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 import kotlin.reflect.KClass
 
 /**
@@ -101,41 +102,64 @@ class HealthGateway(private val context: Context) : HealthSource {
         }.getOrDefault(pkg)
         // When each record was last written to Health Connect: shows whether an app is still syncing.
         fun timeOf(r: Record): Instant? = r.metadata.lastModifiedTime
-        val types: List<Triple<String, String, KClass<out Record>>> = listOf(
-            Triple("Steps", READ_STEPS, StepsRecord::class),
-            Triple("Calories burned", READ_TOTAL_CALORIES, TotalCaloriesBurnedRecord::class),
-            Triple("Active calories", READ_ACTIVE_CALORIES, ActiveCaloriesBurnedRecord::class),
-            Triple("Food", READ_NUTRITION, NutritionRecord::class),
-            Triple("Weight", READ_WEIGHT, WeightRecord::class),
-            Triple("Sleep", READ_SLEEP, SleepSessionRecord::class),
-            Triple("Heart rate", READ_HEART_RATE, HeartRateRecord::class),
-            Triple("Resting heart rate", READ_RESTING_HEART_RATE, RestingHeartRateRecord::class),
-            Triple("Distance", READ_DISTANCE, DistanceRecord::class),
-            Triple("Floors", READ_FLOORS, FloorsClimbedRecord::class),
-            Triple("Exercise", READ_EXERCISE, ExerciseSessionRecord::class),
-            Triple("Water", READ_HYDRATION, HydrationRecord::class),
-            Triple("Body fat", READ_BODY_FAT, BodyFatRecord::class),
-            Triple("Lean mass", READ_LEAN_MASS, LeanBodyMassRecord::class),
-            Triple("HRV", READ_HRV, HeartRateVariabilityRmssdRecord::class),
-            Triple("Blood oxygen", READ_SPO2, OxygenSaturationRecord::class),
-            Triple("Breathing rate", READ_BREATHING, RespiratoryRateRecord::class),
-            Triple("VO2 max", READ_VO2_MAX, Vo2MaxRecord::class),
-        )
-        return types.map { (name, perm, type) ->
-            if (perm !in granted) return@map TypeCheck(name, false, 0, emptyList(), null)
-            try {
-                val recs = client.readRecords(ReadRecordsRequest(type, range, pageSize = 1000)).records
-                TypeCheck(
-                    name, true, recs.size,
-                    recs.map { it.metadata.dataOrigin.packageName }.distinct().map(::label),
-                    recs.mapNotNull(::timeOf).maxOrNull(),
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                TypeCheck(name, true, 0, emptyList(), null, e.message ?: e.javaClass.simpleName)
+        val zone = ZoneId.systemDefault()
+        val today = now.atZone(zone).toLocalDate()
+        fun n(v: Double) = String.format(java.util.Locale.US, "%,d", v.roundToLong())
+        fun d1(v: Double) = String.format(java.util.Locale.US, "%.1f", v)
+        // How to turn one app's records for today into the number Pulse would show.
+        class Spec<T : Record>(
+            val name: String, val perm: String, val type: KClass<T>,
+            val day: (T) -> LocalDate, val show: (List<T>) -> String?,
+        ) {
+            suspend fun run(): TypeCheck {
+                if (perm !in granted) return TypeCheck(name, false, 0, emptyList(), null)
+                return try {
+                    val recs = readAll(type, range)
+                    val todays = recs.filter { day(it) == today }
+                        .groupBy { it.metadata.dataOrigin.packageName }
+                        .mapNotNull { (pkg, rs) -> runCatching { show(rs) }.getOrNull()?.let { label(pkg) to it } }
+                    TypeCheck(
+                        name, true, recs.size,
+                        recs.map { it.metadata.dataOrigin.packageName }.distinct().map(::label),
+                        recs.mapNotNull(::timeOf).maxOrNull(),
+                        today = todays,
+                    )
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    TypeCheck(name, true, 0, emptyList(), null, e.message ?: e.javaClass.simpleName)
+                }
             }
         }
+        fun <T : Record> spec(name: String, perm: String, type: KClass<T>, day: (T) -> LocalDate, show: (List<T>) -> String?) =
+            Spec(name, perm, type, day, show)
+        fun local(t: Instant, o: ZoneOffset?) = t.atZone(o ?: zone).toLocalDate()
+        val specs: List<Spec<out Record>> = listOf(
+            spec("Steps", READ_STEPS, StepsRecord::class, { local(it.startTime, it.startZoneOffset) }) { rs -> n(rs.sumOf { it.count.toDouble() }) },
+            spec("Calories burned", READ_TOTAL_CALORIES, TotalCaloriesBurnedRecord::class, { local(it.startTime, it.startZoneOffset) }) { rs -> n(rs.sumOf { it.energy.inKilocalories }) + " kcal" },
+            spec("Active calories", READ_ACTIVE_CALORIES, ActiveCaloriesBurnedRecord::class, { local(it.startTime, it.startZoneOffset) }) { rs -> n(rs.sumOf { it.energy.inKilocalories }) + " kcal" },
+            spec("Food", READ_NUTRITION, NutritionRecord::class, { local(it.startTime, it.startZoneOffset) }) { rs -> n(rs.sumOf { it.energy?.inKilocalories ?: 0.0 }) + " kcal" },
+            spec("Weight", READ_WEIGHT, WeightRecord::class, { local(it.time, it.zoneOffset) }) { rs -> d1(rs.maxBy { it.time }.weight.inKilograms) + " kg" },
+            spec("Sleep", READ_SLEEP, SleepSessionRecord::class, { local(it.endTime, it.endZoneOffset) }) { rs ->
+                val m = rs.sumOf { r -> Duration.between(r.startTime, r.endTime).toMinutes() - r.stages.filter { it.stage == SleepSessionRecord.STAGE_TYPE_AWAKE || it.stage == SleepSessionRecord.STAGE_TYPE_OUT_OF_BED }.sumOf { Duration.between(it.startTime, it.endTime).toMinutes() } }
+                "${m / 60}h ${m % 60}m"
+            },
+            spec("Heart rate", READ_HEART_RATE, HeartRateRecord::class, { local(it.startTime, it.startZoneOffset) }) { rs ->
+                rs.flatMap { it.samples }.maxByOrNull { it.time }?.let { "${it.beatsPerMinute} bpm latest" }
+            },
+            spec("Resting heart rate", READ_RESTING_HEART_RATE, RestingHeartRateRecord::class, { local(it.time, it.zoneOffset) }) { rs -> "${rs.maxBy { it.time }.beatsPerMinute} bpm" },
+            spec("Distance", READ_DISTANCE, DistanceRecord::class, { local(it.startTime, it.startZoneOffset) }) { rs -> d1(rs.sumOf { it.distance.inMeters } / 1000) + " km" },
+            spec("Floors", READ_FLOORS, FloorsClimbedRecord::class, { local(it.startTime, it.startZoneOffset) }) { rs -> n(rs.sumOf { it.floors }) },
+            spec("Exercise", READ_EXERCISE, ExerciseSessionRecord::class, { local(it.startTime, it.startZoneOffset) }) { rs -> n(rs.sumOf { Duration.between(it.startTime, it.endTime).toMinutes().toDouble() }) + " min" },
+            spec("Water", READ_HYDRATION, HydrationRecord::class, { local(it.startTime, it.startZoneOffset) }) { rs -> n(rs.sumOf { it.volume.inMilliliters }) + " ml" },
+            spec("Body fat", READ_BODY_FAT, BodyFatRecord::class, { local(it.time, it.zoneOffset) }) { rs -> d1(rs.maxBy { it.time }.percentage.value) + "%" },
+            spec("Lean mass", READ_LEAN_MASS, LeanBodyMassRecord::class, { local(it.time, it.zoneOffset) }) { rs -> d1(rs.maxBy { it.time }.mass.inKilograms) + " kg" },
+            spec("HRV", READ_HRV, HeartRateVariabilityRmssdRecord::class, { local(it.time, it.zoneOffset) }) { rs -> n(rs.map { it.heartRateVariabilityMillis }.average()) + " ms" },
+            spec("Blood oxygen", READ_SPO2, OxygenSaturationRecord::class, { local(it.time, it.zoneOffset) }) { rs -> d1(rs.map { it.percentage.value }.average()) + "%" },
+            spec("Breathing rate", READ_BREATHING, RespiratoryRateRecord::class, { local(it.time, it.zoneOffset) }) { rs -> d1(rs.map { it.rate }.average()) + " /min" },
+            spec("VO2 max", READ_VO2_MAX, Vo2MaxRecord::class, { local(it.time, it.zoneOffset) }) { rs -> d1(rs.maxBy { it.time }.vo2MillilitersPerMinuteKilogram) },
+        )
+        return specs.map { it.run() }
     }
 
     override suspend fun readDays(from: LocalDate, to: LocalDate, zone: ZoneId): List<DayLog> {
@@ -213,15 +237,22 @@ class HealthGateway(private val context: Context) : HealthSource {
         val end = to.plusDays(1).atStartOfDay(zone).toInstant()
         val range = TimeRangeFilter.between(start, end)
 
-        // Food: one entry per logged item; kcal and protein summed per day, kcal also per meal.
+        // Food: one entry per logged item; kcal and protein summed per day, kcal also per meal. Food comes from
+        // MyFitnessPal; if another app also copies the same meals in, adding both would double the day, so each
+        // day uses one app: MyFitnessPal when it logged anything that day, else the app with the most kcal.
         val food = HashMap<LocalDate, FoodDay>()
         if (READ_NUTRITION in granted) part("Food", Unit, failed) {
             readAll(NutritionRecord::class, range)
                 .filter { it.metadata.dataOrigin.packageName != context.packageName }
-                .forEach { r ->
-                    val date = r.startTime.atZone(r.startZoneOffset ?: zone).toLocalDate()
+                .groupBy { it.startTime.atZone(it.startZoneOffset ?: zone).toLocalDate() }
+                .forEach { (date, records) ->
                     if (date.isBefore(from) || date.isAfter(to)) return@forEach
-                    food.getOrPut(date) { FoodDay() }.add(r)
+                    val byApp = records.groupBy { it.metadata.dataOrigin.packageName }
+                    val pick = byApp.entries.firstOrNull { it.key.contains("myfitnesspal", ignoreCase = true) }?.value
+                        ?: byApp.values.maxBy { rs -> rs.sumOf { it.energy?.inKilocalories ?: 0.0 } }
+                    val day = FoodDay()
+                    pick.forEach(day::add)
+                    food[date] = day
                 }
         }
 
@@ -243,10 +274,10 @@ class HealthGateway(private val context: Context) : HealthSource {
         // Body composition and vitals: one value per day (the latest for the scale, the average for vitals).
         val noneD = emptyMap<LocalDate, Double>()
         val bodyFat = if (READ_BODY_FAT in granted) part("Body fat", noneD, failed) {
-            perDay(readAll(BodyFatRecord::class, range), zone, from, to, latest = true, { it.time }, { it.zoneOffset }) { it.percentage.value }
+            perDay(scaleFirst(readAll(BodyFatRecord::class, range)), zone, from, to, latest = true, { it.time }, { it.zoneOffset }) { it.percentage.value }
         } else noneD
         val lean = if (READ_LEAN_MASS in granted) part("Lean mass", noneD, failed) {
-            perDay(readAll(LeanBodyMassRecord::class, range), zone, from, to, latest = true, { it.time }, { it.zoneOffset }) { it.mass.inKilograms }
+            perDay(scaleFirst(readAll(LeanBodyMassRecord::class, range)), zone, from, to, latest = true, { it.time }, { it.zoneOffset }) { it.mass.inKilograms }
         } else noneD
         val hrv = if (READ_HRV in granted) part("HRV", noneD, failed) {
             perDay(readAll(HeartRateVariabilityRmssdRecord::class, range), zone, from, to, latest = false, { it.time }, { it.zoneOffset }) { it.heartRateVariabilityMillis }
@@ -268,7 +299,16 @@ class HealthGateway(private val context: Context) : HealthSource {
         val longest = HashMap<LocalDate, SleepSessionRecord>()
         if (READ_SLEEP in granted) part("Sleep", Unit, failed) {
             val sleepRange = TimeRangeFilter.between(from.minusDays(1).atStartOfDay(zone).toInstant(), end)
-            readAll(SleepSessionRecord::class, sleepRange).forEach { r ->
+            // Several apps can record the same night (Fitbit, the phone's own bedtime guess). Adding them would
+            // double it, so each night uses one app: the one with sleep stages (a tracker), most minutes first.
+            val all = readAll(SleepSessionRecord::class, sleepRange)
+            val chosen = all.groupBy { it.endTime.atZone(it.endZoneOffset ?: zone).toLocalDate() }.values.flatMap { night ->
+                night.groupBy { it.metadata.dataOrigin.packageName }.values.maxWith(
+                    compareBy<List<SleepSessionRecord>> { rs -> rs.any { it.stages.isNotEmpty() } }
+                        .thenBy { rs -> rs.sumOf { Duration.between(it.startTime, it.endTime).toMinutes() } },
+                )
+            }
+            chosen.forEach { r ->
                 val date = r.endTime.atZone(r.endZoneOffset ?: zone).toLocalDate()
                 if (date.isBefore(from) || date.isAfter(to)) return@forEach
                 fun mins(vararg types: Int) = r.stages.filter { it.stage in types }
@@ -336,6 +376,10 @@ class HealthGateway(private val context: Context) : HealthSource {
     }
 
     /** One value per local day in [from]..[to] for [metric]; a day no app wrote anything for is left out. */
+    /** The scale's own records (VeSync) when it wrote any, else all of them. */
+    private fun <T : Record> scaleFirst(records: List<T>): List<T> =
+        records.filter { it.metadata.dataOrigin.packageName.contains("vesync", ignoreCase = true) }.ifEmpty { records }
+
     /** Per day, the larger of Health Connect's total and the best single app's raw sum. */
     private fun best(aggregate: Map<LocalDate, Int>, raw: Map<LocalDate, Int>): Map<LocalDate, Int> =
         (aggregate.keys + raw.keys).associateWith { maxOf(aggregate[it] ?: 0, raw[it] ?: 0) }
