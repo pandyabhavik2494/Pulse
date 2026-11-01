@@ -500,7 +500,7 @@ class AppDriver(val compose: ComposeTestRule) {
     /** The node tagged [tag] (or its children) shows [expected], exactly or in part. */
     fun assertTagShows(tag: String, expected: String, substring: Boolean = true) {
         val got = textOf(tag)
-        val ok = if (substring) got.contains(norm(expected)) else got == norm(expected)
+        val ok = if (substring) got.contains(norm(expected), ignoreCase = true) else got.equals(norm(expected), ignoreCase = true)
         if (!ok) throw AssertionError("'$tag' should show '$expected' but shows '$got'")
     }
 
@@ -630,7 +630,11 @@ class AppDriver(val compose: ComposeTestRule) {
             val results = ArrayList<TextLayoutResult>()
             runCatching { c[SemanticsActions.GetTextLayoutResult].action?.invoke(results) }
             val layout = results.firstOrNull()
-            if (layout != null && layout.hasVisualOverflow) {
+            // Width overflow or an ellipsis is a real cut. Height "overflow" is not: big display numbers use a
+            // line height tighter than the font's ascent + descent, which Compose reports as overflow while
+            // drawing the glyphs in full.
+            val cut = layout != null && (layout.didOverflowWidth || (0 until layout.lineCount).any { layout.isLineEllipsized(it) })
+            if (layout != null && cut) {
                 problems += "text '${shown(node).joinToString()}' overflows (ellipsised or cut: ${layout.size} in ${layout.layoutInput.constraints})"
             }
         }

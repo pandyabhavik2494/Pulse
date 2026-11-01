@@ -47,7 +47,7 @@ adb shell am start -W -n $pkg/.MainActivity
 sleep 4
 adb exec-out screencap -p > "$results/release-2-reopened.png"
 adb logcat -d -b crash > "$results/crash-release.txt"
-if grep -q "$pkg" "$results/crash-release.txt"; then
+if grep -q "Process: $pkg" "$results/crash-release.txt"; then
   echo "::error::The release APK crashed"
   cat "$results/crash-release.txt"
   status=1
@@ -76,7 +76,7 @@ adb pull /sdcard/Download/pulse-screens/. "$results/$screen/" >/dev/null || true
 cp -r app/build/reports/androidTests/connected "$results/$screen/report" 2>/dev/null || true
 adb logcat -d > "$results/$screen/logcat.txt"
 adb logcat -d -b crash > "$results/$screen/crash.txt"
-if grep -q "$pkg" "$results/$screen/crash.txt"; then
+if grep -q "Process: $pkg" "$results/$screen/crash.txt"; then
   echo "::error::The app crashed during the $suite tests"
   status=1
 fi

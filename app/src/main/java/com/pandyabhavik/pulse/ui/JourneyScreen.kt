@@ -135,7 +135,7 @@ private fun JourneyCover(s: HomeState, showSettings: Boolean) {
 }
 
 @Composable
-private fun GoalCard(s: HomeState) {
+private fun GoalCard(s: HomeState, showLine: Boolean = true) {
     val p = s.profile ?: return
     PCard(
         background = Brush.linearGradient(listOf(C.wt.copy(alpha = 0.16f), C.wt2.copy(alpha = 0.06f), Color.Transparent)),
@@ -164,7 +164,7 @@ private fun GoalCard(s: HomeState) {
                 maxLines = 2,
             )
         }
-        JourneyLine(s, includeAverage = false)
+        if (showLine) JourneyLine(s, includeAverage = false)
     }
 }
 
@@ -213,7 +213,7 @@ private fun JourneyInner(s: HomeState) {
             Column(Modifier.weight(1f)) { MilestoneList(s) }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 WhatIfCard(s)
-                GoalCard(s)
+                GoalCard(s, showLine = false)
             }
         }
     }
