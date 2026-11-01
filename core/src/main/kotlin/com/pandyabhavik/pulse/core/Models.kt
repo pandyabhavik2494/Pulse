@@ -88,9 +88,9 @@ data class DayLog(
 data class TrendPoint(val date: LocalDate, val raw: Double?, val trend: Double)
 
 enum class RateSource {
-    /** Under 14 days of data: 0.75 kg a week, the agreed starting guess. */
+    /** No complete day of food yet: 0.75 kg a week, the agreed starting guess. */
     STARTING_GUESS,
-    /** From the average deficit of the last 14 days with food logged. */
+    /** From the average deficit of the last 7 complete days with food logged. */
     DEFICITS,
     /** Deficits, cross-checked against what the scale trend actually did (learned burn). */
     DEFICITS_AND_SCALE,

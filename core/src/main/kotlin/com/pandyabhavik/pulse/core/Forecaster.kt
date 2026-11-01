@@ -10,16 +10,19 @@ import kotlin.math.roundToInt
 /**
  * Milestones and projected dates.
  *
- * v1 projects with a constant rate. Real loss slows a little as weight drops (a lighter body burns less),
- * so far-off dates are optimistic; the rate is recomputed every day from fresh data, and once 14+ days of
- * trend exist it is blended with what the scale actually did, which corrects the drift over time.
+ * Dates follow the average of the last 7 complete days of food (Bhavik's choice: eat more this week and every
+ * date moves later, eat less and they come sooner). Before the first complete day, the 0.75 kg/week starting
+ * guess. A constant rate: real loss slows a little as weight drops, so far-off dates are a little optimistic;
+ * the rate is recomputed every day. The scale is still compared with logged food to learn the real burn.
  */
 object Forecaster {
     const val STARTING_GUESS_KG_PER_WEEK = 0.75
     const val MAX_KG_PER_WEEK = 1.5
 
-    /** Days of balance (and trend) data needed before the starting guess is replaced. */
+    /** Days of trend needed before the scale is compared with logged food (learned burn). */
     const val MIN_DAYS = 14
+    /** Complete days of food the pace averages (the latest ones). */
+    const val AVG_DAYS = 7
     /** Longest window used to compare the scale trend with logged food. */
     const val SCALE_WINDOW_DAYS = 28
     /** Targets closer than this are merged into one milestone. */
@@ -96,11 +99,11 @@ object Forecaster {
         val rate: Double
         val source: RateSource
 
-        if (balances.size < MIN_DAYS) {
+        if (balances.isEmpty()) {
             rate = STARTING_GUESS_KG_PER_WEEK
             source = RateSource.STARTING_GUESS
         } else {
-            val avg = balances.take(MIN_DAYS).map { it.balance!! }.average()
+            val avg = balances.take(AVG_DAYS).map { it.balance!! }.average()
             avgDeficit = avg.roundToInt()
             val deficitRate = avg / Energy.KCAL_PER_KG * 7.0
 
@@ -112,17 +115,13 @@ object Forecaster {
                 val windowStart = end.date.minusDays(window)
                 val startTrend = trendOn(past, windowStart)!!
                 val drop = startTrend - end.trend
-                val scaleRate = drop / window * 7.0
                 val eaten = byDate.values.filter { it.eaten != null && it.date.isAfter(windowStart) && !it.date.isAfter(end.date) }
                 if (eaten.isNotEmpty()) {
                     learnedBurn = (eaten.map { it.eaten!! }.average() + drop * Energy.KCAL_PER_KG / window).roundToInt()
                 }
-                rate = (deficitRate + scaleRate) / 2.0
-                source = RateSource.DEFICITS_AND_SCALE
-            } else {
-                rate = deficitRate
-                source = RateSource.DEFICITS
             }
+            rate = deficitRate
+            source = RateSource.DEFICITS
         }
 
         val stalled = rate <= 0.0
@@ -147,6 +146,16 @@ object Forecaster {
         val before = previous.milestones.firstOrNull { abs(it.kg - next.kg) < 1e-6 }?.projected ?: return null
         return ChronoUnit.DAYS.between(now, before).toInt()
     }
+
+    /** [whatIf] for every milestone not reached yet, heaviest first: (milestone, date at [deficitPerDay]). */
+    fun whatIfAll(f: Forecast, trendKg: Double, from: LocalDate, deficitPerDay: Int): List<Pair<Milestone, LocalDate?>> =
+        f.milestones.filter { it.reachedOn == null }.map { m ->
+            m to when {
+                deficitPerDay <= 0 -> null
+                trendKg <= m.kg -> from
+                else -> from.plusDays(ceil((trendKg - m.kg) / (deficitPerDay / Energy.KCAL_PER_KG) - EPS).toLong())
+            }
+        }
 
     /**
      * Goal date if Bhavik averaged [deficitPerDay] kcal under from [from] at [trendKg]: a constant

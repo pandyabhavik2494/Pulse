@@ -239,7 +239,13 @@ class ScreensTest {
         assertNotNull(expected)
         app.assertTagShows("whatif_result", F.date(expected!!, s.now.toLocalDate()))
         shot("19-journey-what-if-1000")
-        app.assertNoneClipped(required = listOf("whatif_slider", "whatif_result"))
+        app.assertNoneClipped(required = listOf("whatif_slider"))
+        // Every milestone ahead gets its date at that pace, not only the goal.
+        app.assertTagShows("whatif_row_0", "First 5 kg", substring = true)
+        app.assertTagShows("whatif_avg", "7-day average", substring = true)
+        app.scrollTo("whatif_result")
+        shot("19b-journey-what-if-all-milestones")
+        app.assertNoneClipped(required = listOf("whatif_result"))
     }
 
     @Test

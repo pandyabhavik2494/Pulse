@@ -68,6 +68,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
 import androidx.core.content.res.ResourcesCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pandyabhavik.pulse.R
@@ -301,9 +302,6 @@ private fun WhatIfCard(s: HomeState) {
     val start = ((s.forecast?.avgDeficit ?: 500).coerceIn(0, 1500) / 50f).roundToInt() * 50f
     var v by rememberSaveable { mutableFloatStateOf(start) }
     val kcal = v.roundToInt()
-    val date = remember(kcal, s.trendKg, p) {
-        if (kcal <= 0) null else runCatching { Forecaster.whatIf(p, s.trendKg ?: p.startKg, today, kcal) }.getOrNull()
-    }
     PCard {
         Lbl("What if", Icons.Rounded.Tune, C.mute)
         Text(
@@ -336,25 +334,63 @@ private fun WhatIfCard(s: HomeState) {
             Text("0", style = T.small, modifier = Modifier.weight(1f))
             Text("1,500", style = T.small)
         }
-        Spacer(Modifier.height(10.dp))
-        val current = s.forecast?.goal?.projected
-        val result = when {
-            date == null -> "Pick a deficit above 0 to see a date"
-            current != null -> "${F.date(date, today)} · ${F.sooner(date, current)}"
-            else -> F.date(date, today)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("${F.kgShort(p.goalKg)} kg", style = T.body.copy(color = C.ink), modifier = Modifier.weight(1f))
+        val avg = s.forecast?.avgDeficit
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                result,
-                style = T.label,
-                textAlign = TextAlign.End,
-                maxLines = 2,
-                modifier = Modifier
-                    .padding(start = 8.dp)
-                    .then(if (date != null) Modifier.gradient(C.weightBrush) else Modifier)
-                    .testTag("whatif_result"),
+                avg?.let { "Your 7-day average: ${F.n(abs(it))} kcal ${if (it >= 0) "more burned" else "more eaten"} a day" }
+                    ?: "No full day of food yet: starting at 500",
+                style = T.small,
+                modifier = Modifier.weight(1f).testTag("whatif_avg"),
             )
+            if (avg != null && avg > 0 && kcal != (avg.coerceIn(0, 1500) / 50f).roundToInt() * 50) {
+                Text(
+                    "Use it",
+                    style = T.small.copy(color = C.under, fontWeight = FontWeight(700)),
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .clickable { v = (avg.coerceIn(0, 1500) / 50f).roundToInt() * 50f }
+                        .padding(vertical = 6.dp, horizontal = 4.dp)
+                        .testTag("whatif_reset"),
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        // Every milestone still ahead, at the slider's pace, against today's forecast (the 7-day average).
+        val rows = remember(kcal, s.trendKg, s.forecast) {
+            s.forecast?.let { Forecaster.whatIfAll(it, s.trendKg ?: p.startKg, today, kcal) }.orEmpty()
+        }
+        if (rows.isEmpty()) {
+            Text("Every milestone reached", style = T.label, modifier = Modifier.testTag("whatif_result"))
+        }
+        rows.forEachIndexed { i, (m, at) ->
+            val now = m.projected
+            val result = when {
+                at == null -> "Pick a number above 0 to see dates"
+                now != null -> "${F.date(at, today)} · ${F.sooner(at, now)}"
+                else -> F.date(at, today)
+            }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 5.dp)
+                    .testTag("whatif_row_$i"),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(m.label, style = T.body.copy(color = if (m.isGoal) C.ink else C.soft, fontWeight = if (m.isGoal) FontWeight(700) else FontWeight(500)), maxLines = 1)
+                    Text("${F.kgShort(m.kg)} kg", style = T.small.copy(fontSize = 11.5.sp, color = C.dim))
+                }
+                Text(
+                    result,
+                    style = T.label,
+                    textAlign = TextAlign.End,
+                    maxLines = 2,
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .then(if (at != null) Modifier.gradient(if (m.isGoal) C.weightBrush else C.goBrush) else Modifier)
+                        .then(if (m.isGoal) Modifier.testTag("whatif_result") else Modifier),
+                )
+            }
         }
         Text("Only answers a question. Your plan doesn't change.", style = T.small.copy(fontSize = 11.5.sp, color = C.dim), modifier = Modifier.padding(top = 8.dp))
     }

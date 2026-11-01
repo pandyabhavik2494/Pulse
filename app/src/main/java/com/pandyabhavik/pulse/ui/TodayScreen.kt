@@ -150,11 +150,10 @@ private fun TodayInner(s: HomeState, openSheet: () -> Unit) {
                     .padding(bottom = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // Bhavik: on the inner screen the overview sits on the left, the sections on the right.
                 HealthWarning(s)
+                s.recap?.let { RecapCard(it, s.recapCommitted) }
                 Dashboard(s)
-                CaloriesSection(s, openSheet)
-                ActivitySection(s)
-                HeartSection(s)
             }
             Column(
                 Modifier
@@ -163,8 +162,10 @@ private fun TodayInner(s: HomeState, openSheet: () -> Unit) {
                     .padding(bottom = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                s.recap?.let { RecapCard(it, s.recapCommitted) }
+                CaloriesSection(s, openSheet)
+                ActivitySection(s)
                 BodySection(s)
+                HeartSection(s)
                 SleepSection(s)
             }
         }

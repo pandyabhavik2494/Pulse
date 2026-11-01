@@ -182,13 +182,16 @@ class ActionsTest {
             val date = checkNotNull(Forecaster.whatIf(TestData.PROFILE, trend, today, kcal))
             app.assertTagShows("whatif_result", F.date(date, today))
             results += app.textOf("whatif_result")
+            // The first milestone ahead moves with the slider too.
+            val first = Forecaster.whatIfAll(checkNotNull(s.forecast), trend, today, kcal).first()
+            app.assertTagShows("whatif_row_0", F.date(checkNotNull(first.second), today), substring = true)
             shot("${48 + i}-what-if-$kcal")
         }
         assertEquals("each slider position should give its own date: $results", 3, results.distinct().size)
         // Zero has no date at all.
         app.node("whatif_slider").performSemanticsAction(SemanticsActions.SetProgress) { it(0f) }
         app.idle()
-        app.assertTagShows("whatif_result", "Pick a deficit above 0", substring = true)
+        app.assertTagShows("whatif_result", "Pick a number above 0", substring = true)
         // The plan itself didn't change.
         assertEquals(s.forecast?.goal?.projected, app.state().forecast?.goal?.projected)
     }

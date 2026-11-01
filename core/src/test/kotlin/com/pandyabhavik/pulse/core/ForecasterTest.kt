@@ -78,19 +78,28 @@ class ForecasterTest {
         assertTrue(f.milestones.all { it.reachedOn == null })
     }
 
-    @Test fun thirteenDaysIsStillTheStartingGuess() {
-        val days = Fixtures.bhavikDays(13)
-        val asOf = START.plusDays(13)
-        val f = Forecaster.forecast(BHAVIK, days, Trend.of(days, START, asOf), asOf)
-        assertEquals(RateSource.STARTING_GUESS, f.source)
-        assertEquals(0.75, f.rateKgPerWeek, 1e-9)
+    @Test fun oneCompleteDayAlreadyUsesTheAverage() {
+        val days = listOf(Fixtures.day(START, 1100))
+        val f = Forecaster.forecast(BHAVIK, days, emptyList(), START.plusDays(1))
+        assertEquals(RateSource.DEFICITS, f.source)
+        assertEquals(1100, f.avgDeficit)
+        assertEquals(1.0, f.rateKgPerWeek, 1e-9)
     }
 
     @Test fun todayIsExcludedFromTheAverage() {
-        // 14 days of logs, but the 14th is today -> only 13 complete days.
-        val days = Fixtures.bhavikDays(14)
-        val f = Forecaster.forecast(BHAVIK, days, Trend.of(days, START, START.plusDays(13)), START.plusDays(13))
+        // Only today's (incomplete) log -> still the starting guess.
+        val days = listOf(Fixtures.day(START, -2000))
+        val f = Forecaster.forecast(BHAVIK, days, emptyList(), START)
         assertEquals(RateSource.STARTING_GUESS, f.source)
+    }
+
+    @Test fun onlyTheLatestSevenDaysCount() {
+        val asOf = START.plusDays(15)
+        val days = (1..7).map { Fixtures.day(START.plusDays(it.toLong()), -500) } +   // a bad first week
+            (8..14).map { Fixtures.day(START.plusDays(it.toLong()), 1100) }           // a good week now
+        val f = Forecaster.forecast(BHAVIK, days, emptyList(), asOf)
+        assertEquals(1100, f.avgDeficit)
+        assertEquals(1.0, f.rateKgPerWeek, 1e-9)
     }
 
     @Test fun fourteenDaysUsesDeficits() {
@@ -103,15 +112,14 @@ class ForecasterTest {
         assertNull(f.learnedBurn)
     }
 
-    @Test fun bhavikAfter24DaysBlendsDeficitsAndScale() {
+    @Test fun bhavikAfter24DaysFollowsTheWeekAndLearnsBurn() {
         val days = Fixtures.bhavikDays(24)
         val asOf = START.plusDays(24)
         val trend = Trend.of(days, START, asOf)
         val f = Forecaster.forecast(BHAVIK, days, trend, asOf)
-        assertEquals(RateSource.DEFICITS_AND_SCALE, f.source)
+        assertEquals(RateSource.DEFICITS, f.source)
         assertEquals(825, f.avgDeficit)
-        // The trend lags the scale early on, so the blend is under the deficit-only 0.75.
-        assertTrue("${f.rateKgPerWeek}", f.rateKgPerWeek > 0.4 && f.rateKgPerWeek < 0.75)
+        assertEquals(0.75, f.rateKgPerWeek, 1e-9)
         val learned = f.learnedBurn!!
         assertTrue("$learned", learned in 2100..2800)
         assertEquals(trend.last().trend, f.currentTrendKg, 1e-9)
@@ -121,25 +129,21 @@ class ForecasterTest {
         val drop = trend.first().trend - end.trend
         val eaten = days.drop(1).map { it.eaten!! }.average()
         assertEquals(Math.round(eaten + drop * 7700 / 23).toInt(), learned)
-        val deficitRate = 825.0 / 7700 * 7
-        val scaleRate = drop / 23 * 7
-        assertEquals((deficitRate + scaleRate) / 2, f.rateKgPerWeek, 1e-9)
     }
 
-    @Test fun scaleWindowCapsAt28Days() {
+    @Test fun learnedBurnWindowCapsAt28Days() {
         val days = Fixtures.bhavikDays(60)
         val asOf = START.plusDays(60)
         val trend = Trend.of(days, START, asOf)
         val f = Forecaster.forecast(BHAVIK, days, trend, asOf)
         val end = trend.first { it.date == asOf.minusDays(1) }.trend
         val start = trend.first { it.date == asOf.minusDays(29) }.trend
-        val scaleRate = (start - end) / 28 * 7
-        assertEquals((0.75 + scaleRate) / 2, f.rateKgPerWeek, 1e-9)
-        // after two months the trend has caught up with the scale: close to 0.75
-        assertTrue(f.rateKgPerWeek > 0.68)
+        val eaten = days.filter { it.date.isAfter(asOf.minusDays(29)) && it.date.isBefore(asOf) }.map { it.eaten!! }.average()
+        assertEquals(Math.round(eaten + (start - end) * 7700 / 28).toInt(), f.learnedBurn)
+        assertEquals(0.75, f.rateKgPerWeek, 1e-9)
     }
 
-    @Test fun deficitsUseLast14DaysWithBalanceSkippingGaps() {
+    @Test fun deficitsUseLast7DaysWithBalanceSkippingGaps() {
         val asOf = LocalDate.of(2026, 12, 1)
         val days = ArrayList<DayLog>()
         // 20 days with 500 under, then the most recent 14 logged days at 1,000 under, with gaps.
@@ -166,7 +170,7 @@ class ForecasterTest {
         val f = Forecaster.forecast(BHAVIK, days, emptyList(), START.plusDays(15))
         assertEquals(RateSource.STALLED, f.source)
         assertEquals(0.0, f.rateKgPerWeek, 1e-9)
-        assertEquals(-50, f.avgDeficit)
+        assertEquals(-71, f.avgDeficit) // last 7: four at -200, three at +100
         assertTrue(f.milestones.all { it.projected == null })
         assertNotNull(f.next)
     }
@@ -269,6 +273,26 @@ class ForecasterTest {
     @Test fun whatIfNoDeficitIsNull() {
         assertNull(Forecaster.whatIf(BHAVIK, 117.6, START, 0))
         assertNull(Forecaster.whatIf(BHAVIK, 117.6, START, -300))
+    }
+
+    @Test fun whatIfAllMovesEveryMilestone() {
+        val f = Forecaster.forecast(BHAVIK, emptyList(), emptyList(), START)
+        val at770 = Forecaster.whatIfAll(f, 120.0, START, 770)
+        assertEquals(11, at770.size)
+        assertEquals(START.plusDays(50), at770.first().second)    // 5 kg at 0.1 kg a day
+        assertEquals(START.plusDays(350), at770.last().second)    // goal, same as whatIf
+        assertEquals(Forecaster.whatIf(BHAVIK, 120.0, START, 770), at770.last().second)
+        val at1540 = Forecaster.whatIfAll(f, 120.0, START, 1540)
+        assertTrue(at1540.zip(at770).all { (a, b) -> a.second!!.isBefore(b.second) })
+        assertTrue(Forecaster.whatIfAll(f, 120.0, START, 0).all { it.second == null })
+    }
+
+    @Test fun whatIfAllSkipsReachedMilestones() {
+        val trend = listOf(TrendPoint(START, 120.0, 120.0), TrendPoint(START.plusDays(40), 114.5, 114.8))
+        val f = Forecaster.forecast(BHAVIK, emptyList(), trend, START.plusDays(41))
+        val all = Forecaster.whatIfAll(f, 114.8, START.plusDays(41), 770)
+        assertEquals("5% down", all.first().first.label)
+        assertEquals(10, all.size)
     }
 
     @Test fun whatIfAtGoalIsToday() {

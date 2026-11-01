@@ -111,10 +111,10 @@ object F {
     fun pace(s: HomeState): String {
         val f = s.forecast ?: return "Pace appears after your first weigh-ins"
         return when (f.source) {
-            RateSource.STARTING_GUESS -> "Starting guess until 14 days of data"
+            RateSource.STARTING_GUESS -> "Starting guess until a full day of food"
             RateSource.STALLED -> "Pace paused: not losing right now"
-            RateSource.DEFICITS -> "Pace: ${String.format(Locale.US, "%.2f", f.rateKgPerWeek)} kg/week (last 14 days)"
-            RateSource.DEFICITS_AND_SCALE -> "Pace: ${String.format(Locale.US, "%.2f", f.rateKgPerWeek)} kg/week (last 14 days, scale-checked)"
+            RateSource.DEFICITS -> "Pace: ${String.format(Locale.US, "%.2f", f.rateKgPerWeek)} kg/week (7-day average)"
+            RateSource.DEFICITS_AND_SCALE -> "Pace: ${String.format(Locale.US, "%.2f", f.rateKgPerWeek)} kg/week (7-day average)"
         }
     }
 
