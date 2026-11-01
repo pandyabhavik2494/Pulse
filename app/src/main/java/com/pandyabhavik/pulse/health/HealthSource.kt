@@ -17,4 +17,6 @@ interface HealthSource {
     fun settingsIntent(): Intent
     /** Permission strings Pulse asks for (Health Connect read permissions + background read). */
     val permissions: Set<String>
+    /** What the last [readDays] couldn't read ("Heart rate: rate limited"), empty when everything came back. */
+    val problems: List<String> get() = emptyList()
 }

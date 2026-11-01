@@ -561,7 +561,9 @@ internal object Art {
                     glow.color = argb(colors[0], 0.8f)
                     solid.color = argb(colors[0])
                 } else {
-                    val sweep = SweepGradient(cx, cx, colors.map { argb(it) }.toIntArray(), null)
+                    // A closed ring (nothing eaten yet) wraps its colours round to the first, so no seam shows.
+                    val wrapped = if (fe <= 0.002f) colors + colors.first() else colors
+                    val sweep = SweepGradient(cx, cx, wrapped.map { argb(it) }.toIntArray(), null)
                     sweep.setLocalMatrix(Matrix().apply { setRotate(-90f, cx, cx) })
                     glow.shader = sweep
                     solid.shader = sweep

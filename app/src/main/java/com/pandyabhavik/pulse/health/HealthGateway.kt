@@ -7,9 +7,11 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.aggregate.AggregateMetric
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.MealType
 import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.Record
+import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
@@ -24,6 +26,8 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.Period
 import java.time.ZoneId
+import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlin.math.roundToInt
 import kotlin.reflect.KClass
 
@@ -57,18 +61,59 @@ class HealthGateway(private val context: Context) : HealthSource {
     override fun settingsIntent(): Intent =
         Intent(HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
+    @Volatile override var problems: List<String> = emptyList()
+        private set
+
+    /**
+     * Runs one data type's read. A failure (a revoked permission, Health Connect's rate limit, a bad
+     * record from some app) costs only that type: it's logged, noted in [problems], and the rest still syncs.
+     */
+    private suspend fun <T> part(name: String, empty: T, failed: MutableList<String>, read: suspend () -> T): T = try {
+        read()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w("HealthGateway", "Reading $name failed", e)
+        failed += "$name: ${e.message ?: e.javaClass.simpleName}"
+        empty
+    }
+
     override suspend fun readDays(from: LocalDate, to: LocalDate, zone: ZoneId): List<DayLog> {
         if (status() != HealthStatus.AVAILABLE || to.isBefore(from)) return emptyList()
         val granted = granted()
+        val failed = ArrayList<String>()
+        try {
+            return readParts(from, to, zone, granted, failed)
+        } finally {
+            problems = failed
+        }
+    }
+
+    private suspend fun readParts(from: LocalDate, to: LocalDate, zone: ZoneId, granted: Set<String>, failed: MutableList<String>): List<DayLog> {
 
         // Daily totals. Health Connect buckets these by each record's own local time.
-        val steps = if (READ_STEPS in granted) daily(StepsRecord.COUNT_TOTAL, from, to).mapValues { it.value.toInt() } else emptyMap()
-        val total = if (READ_TOTAL_CALORIES in granted) {
+        val none = emptyMap<LocalDate, Int>()
+        val steps = if (READ_STEPS in granted) part("Steps", none, failed) {
+            daily(StepsRecord.COUNT_TOTAL, from, to).mapValues { it.value.toInt() }
+        } else none
+        val total = if (READ_TOTAL_CALORIES in granted) part("Calories burned", none, failed) {
             daily(TotalCaloriesBurnedRecord.ENERGY_TOTAL, from, to).mapValues { it.value.inKilocalories.roundToInt() }
-        } else emptyMap()
-        val active = if (READ_ACTIVE_CALORIES in granted) {
+        } else none
+        val active = if (READ_ACTIVE_CALORIES in granted) part("Active calories", none, failed) {
             daily(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL, from, to).mapValues { it.value.inKilocalories.roundToInt() }
-        } else emptyMap()
+        } else none
+        val hrAvg = if (READ_HEART_RATE in granted) part("Heart rate", none, failed) {
+            daily(HeartRateRecord.BPM_AVG, from, to).mapValues { it.value.toInt() }
+        } else none
+        val hrMin = if (READ_HEART_RATE in granted) part("Heart rate", none, failed) {
+            daily(HeartRateRecord.BPM_MIN, from, to).mapValues { it.value.toInt() }
+        } else none
+        val hrMax = if (READ_HEART_RATE in granted) part("Heart rate", none, failed) {
+            daily(HeartRateRecord.BPM_MAX, from, to).mapValues { it.value.toInt() }
+        } else none
+        val restingHr = if (READ_RESTING_HEART_RATE in granted) part("Resting heart rate", none, failed) {
+            daily(RestingHeartRateRecord.BPM_AVG, from, to).mapValues { it.value.toInt() }
+        } else none
 
         val start = from.atStartOfDay(zone).toInstant()
         val end = to.plusDays(1).atStartOfDay(zone).toInstant()
@@ -76,7 +121,7 @@ class HealthGateway(private val context: Context) : HealthSource {
 
         // Food: one entry per logged item; kcal and protein summed per day, kcal also per meal.
         val food = HashMap<LocalDate, FoodDay>()
-        if (READ_NUTRITION in granted) {
+        if (READ_NUTRITION in granted) part("Food", Unit, failed) {
             readAll(NutritionRecord::class, range)
                 .filter { it.metadata.dataOrigin.packageName != context.packageName }
                 .forEach { r ->
@@ -88,7 +133,7 @@ class HealthGateway(private val context: Context) : HealthSource {
 
         // Weight: the latest weigh-in of each day.
         val weight = HashMap<LocalDate, Double>()
-        if (READ_WEIGHT in granted) {
+        if (READ_WEIGHT in granted) part("Weight", Unit, failed) {
             readAll(WeightRecord::class, range)
                 .groupBy { it.time.atZone(it.zoneOffset ?: zone).toLocalDate() }
                 .forEach { (date, records) ->
@@ -100,7 +145,7 @@ class HealthGateway(private val context: Context) : HealthSource {
         // Sleep: a night counts on the day it ends (Monday night's sleep is Tuesday's), so read from the
         // day before [from]. Awake and out-of-bed stages don't count as sleep.
         val sleep = HashMap<LocalDate, Int>()
-        if (READ_SLEEP in granted) {
+        if (READ_SLEEP in granted) part("Sleep", Unit, failed) {
             val sleepRange = TimeRangeFilter.between(from.minusDays(1).atStartOfDay(zone).toInstant(), end)
             readAll(SleepSessionRecord::class, sleepRange).forEach { r ->
                 val date = r.endTime.atZone(r.endZoneOffset ?: zone).toLocalDate()
@@ -127,6 +172,10 @@ class HealthGateway(private val context: Context) : HealthSource {
                 meals = f?.meals() ?: Meals(),
                 weightKg = weight[d],
                 sleepMinutes = sleep[d],
+                restingHr = restingHr[d],
+                hrAvg = hrAvg[d],
+                hrMin = hrMin[d],
+                hrMax = hrMax[d],
             )
             // Dates with nothing at all are left out; the repository treats a missing date as "no data".
             if (log != DayLog(d)) out += log
@@ -204,10 +253,15 @@ class HealthGateway(private val context: Context) : HealthSource {
         val READ_NUTRITION = HealthPermission.getReadPermission(NutritionRecord::class)
         val READ_WEIGHT = HealthPermission.getReadPermission(WeightRecord::class)
         val READ_SLEEP = HealthPermission.getReadPermission(SleepSessionRecord::class)
+        val READ_HEART_RATE = HealthPermission.getReadPermission(HeartRateRecord::class)
+        val READ_RESTING_HEART_RATE = HealthPermission.getReadPermission(RestingHeartRateRecord::class)
         const val READ_IN_BACKGROUND = "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
 
-        /** The six data types. Background reading is asked for too, but isn't needed to sync in the app. */
-        val DATA = setOf(READ_STEPS, READ_TOTAL_CALORIES, READ_ACTIVE_CALORIES, READ_NUTRITION, READ_WEIGHT, READ_SLEEP)
+        /** The data types. Background reading is asked for too, but isn't needed to sync in the app. */
+        val DATA = setOf(
+            READ_STEPS, READ_TOTAL_CALORIES, READ_ACTIVE_CALORIES, READ_NUTRITION, READ_WEIGHT, READ_SLEEP,
+            READ_HEART_RATE, READ_RESTING_HEART_RATE,
+        )
         val ALL = DATA + READ_IN_BACKGROUND
     }
 }

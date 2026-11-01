@@ -86,12 +86,12 @@ class FlexModeTest {
         app.assertTagShows("steps_value", n(TestData.TODAY_STEPS))
         val trend = app.seeded?.trendKg?.let { String.format(java.util.Locale.US, "%.1f", it) }
         if (trend != null) app.assertTagShows("weight_trend_value", trend)
-        for (t in listOf("balance_ring", "balance_value", "steps_value", "weight_trend_value", "next_milestone")) assertAbove(t, hinge)
+        for (t in listOf("balance_ring", "balance_value", "steps_value", "weight_trend_value")) assertAbove(t, hinge)
         for (t in listOf("nav_today", "nav_journey", "nav_history", "nav_settings")) assertBelow(t, hinge)
         assertBelow("today_screen", hinge)
         app.assertNoneClipped(
             required = listOf("balance_ring", "balance_value", "balance_label", "steps_value", "weight_trend_value", "nav_today", "nav_settings"),
-            optional = listOf("next_milestone", "streak_chip", "win_chip"),
+            optional = listOf("heart_resting", "sleep_value"),
         )
         app.shot("70-flex-today")
 
@@ -115,7 +115,6 @@ class FlexModeTest {
         app.assertTagShows("balance_value", n(TestData.OVER_BY), substring = false)
         app.assertTagShows("balance_label", "kcal over")
         assertAbove("balance_value", hinge2)
-        if (app.exists("spill_line")) assertBelow("spill_line", hinge2)
         app.shot("74-flex-today-over")
     }
 }

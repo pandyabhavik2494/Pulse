@@ -72,6 +72,8 @@ enum class Scene(val now: LocalDateTime) {
     NO_FOOD(LocalDateTime.of(2026, 11, 24, 9, 10)),
     /** Onboarded, but Health Connect access was taken away (nothing granted). */
     NO_PERMISSIONS(TestData.NOW),
+    /** Day one, 1 Nov at 3:13 PM: onboarded a moment ago, all access allowed, and Health Connect has nothing. */
+    EMPTY(LocalDateTime.of(2026, 11, 1, 15, 13)),
     ;
 
     val today: LocalDate get() = now.toLocalDate()
@@ -140,6 +142,11 @@ object TestData {
             meals = Meals(breakfast = breakfast, lunch = lunch, dinner = dinner, snacks = snacks),
             weightKg = kg,
             sleepMinutes = sleep,
+            // Resting heart rate eases from 66 to 63 bpm over the month as the walking adds up.
+            restingHr = 66 - i / 8,
+            hrAvg = 76 + i % 5,
+            hrMin = 56 + i % 4,
+            hrMax = 118 + (i * 7) % 30,
         )
     }
 
@@ -183,6 +190,9 @@ object TestData {
     const val OVER_BY = OVER_EATEN - TODAY_BURNED // 180
     val SAT_21: LocalDate = LocalDate.of(2026, 11, 21)
     const val SAT_21_SLEEP = "6 h 40 m"
+    /** 24 Nov: resting heart rate and last night's sleep (412 min). */
+    const val RESTING_HR = 64
+    const val TODAY_SLEEP_SHORT = "6 h 52 m"
 
     /** The 24 days as Health Connect would give them on 24 Nov at 7:42 PM. */
     fun baseDays(): List<DayLog> = TABLE.map { it.log() }
@@ -228,6 +238,7 @@ object TestData {
                 date = today, steps = 2140, burnedTotal = 880, burnedActive = 190, eaten = null, proteinG = null,
                 meals = Meals(), weightKg = 116.4, sleepMinutes = 412,
             )
+            Scene.EMPTY -> emptyList()
             else -> base
         }.filter { !it.date.isAfter(today) }
     }
@@ -625,7 +636,7 @@ class AppDriver(val compose: ComposeTestRule) {
         if (problems.isNotEmpty()) throw AssertionError("'$tag' ${problems.joinToString("; ")}")
     }
 
-    /** [assertNotClipped] for every tag in [tags] that's on screen now; [required] ones must exist. */
+    /** [assertNotClipped] for every tag (scrolled into view first); [required] ones must exist. */
     fun assertNoneClipped(required: List<String>, optional: List<String> = emptyList()) {
         val errors = ArrayList<String>()
         for (t in required + optional) {
@@ -633,6 +644,9 @@ class AppDriver(val compose: ComposeTestRule) {
                 if (t in required) errors += "'$t' is missing"
                 continue
             }
+            // Today is a scrolling list of sections: bring each one into view before judging it.
+            scrollTo(t)
+            idle()
             runCatching { assertNotClipped(t) }.onFailure { errors += it.message ?: "'$t' is clipped" }
         }
         if (errors.isNotEmpty()) throw AssertionError("Layout problems on ${scene.name}${if (wide) " (inner screen)" else " (cover screen)"}:\n" + errors.joinToString("\n"))

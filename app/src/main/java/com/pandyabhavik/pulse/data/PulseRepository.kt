@@ -98,6 +98,7 @@ class PulseRepository(
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Sync failed", e)
+                lastError = e.message ?: e.javaClass.simpleName
                 false
             }
             val s = snapshot()
@@ -111,19 +112,68 @@ class PulseRepository(
 
     private suspend fun read(): Boolean {
         val source = health
-        if (source.status() != HealthStatus.AVAILABLE) return false
+        lastError = null
+        when (source.status()) {
+            HealthStatus.NOT_INSTALLED -> { lastError = "Health Connect isn't installed"; return false }
+            HealthStatus.NEEDS_UPDATE -> { lastError = "Health Connect needs an update"; return false }
+            HealthStatus.AVAILABLE -> Unit
+        }
         val granted = source.granted()
-        if (source.permissions.none { it in granted && !it.endsWith(BACKGROUND_SUFFIX) }) return false
+        if (source.permissions.none { it in granted && !it.endsWith(BACKGROUND_SUFFIX) }) {
+            lastError = "Pulse has no Health Connect access yet"
+            return false
+        }
         val today = today()
         val first = !store.current().firstSyncDone
         val from = if (first) today.minusDays(HISTORY_DAYS - 1) else today.minusDays(RECENT_DAYS - 1)
         val logs = source.readDays(from, today, zone())
             .filter { !it.date.isBefore(from) && !it.date.isAfter(today) }
-        dao.replaceRange(from.toString(), today.toString(), logs.map { it.toEntity() })
+        val problems = source.problems
+        lastProblems = problems
+        if (problems.isEmpty()) {
+            dao.replaceRange(from.toString(), today.toString(), logs.map { it.toEntity() })
+        } else {
+            // Some types couldn't be read this time: keep what was stored for them instead of wiping it.
+            val old = dao.days().map { it.toDayLog() }.associateBy { it.date }
+            val fresh = logs.associateBy { it.date }
+            val merged = (old.keys.filter { !it.isBefore(from) && !it.isAfter(today) } + fresh.keys).distinct().map { d ->
+                val n = fresh[d] ?: DayLog(d)
+                val o = old[d] ?: DayLog(d)
+                n.copy(
+                    steps = n.steps ?: o.steps,
+                    burnedTotal = n.burnedTotal ?: o.burnedTotal,
+                    burnedActive = n.burnedActive ?: o.burnedActive,
+                    eaten = n.eaten ?: o.eaten,
+                    proteinG = n.proteinG ?: o.proteinG,
+                    meals = if (n.eaten != null) n.meals else o.meals,
+                    weightKg = n.weightKg ?: o.weightKg,
+                    sleepMinutes = n.sleepMinutes ?: o.sleepMinutes,
+                    restingHr = n.restingHr ?: o.restingHr,
+                    hrAvg = n.hrAvg ?: o.hrAvg,
+                    hrMin = n.hrMin ?: o.hrMin,
+                    hrMax = n.hrMax ?: o.hrMax,
+                )
+            }
+            dao.upsertDays(merged.map { it.toEntity() })
+        }
+        // Nothing came back and something failed: a failed sync. Some types failing still counts, with
+        // [lastProblems] saying which.
+        if (logs.isEmpty() && problems.isNotEmpty()) {
+            lastError = "Couldn't read Health Connect (${problems.first()})"
+            return false
+        }
         val at = clock().instant()
         store.update { it.copy(firstSyncDone = true, lastSync = at) }
         return true
     }
+
+    /** What the last sync couldn't read, for Settings. Empty when it all came back. */
+    @Volatile var lastProblems: List<String> = emptyList()
+        private set
+
+    /** Why the last sync failed outright (Health Connect missing, no access, an error), or null. */
+    @Volatile var lastError: String? = null
+        private set
 
     private suspend fun refreshWidgets() {
         try {

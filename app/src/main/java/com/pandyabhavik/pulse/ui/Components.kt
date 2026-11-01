@@ -442,11 +442,19 @@ fun BalanceRing(
 
                 // The unspent gap: the deficit, glowing.
                 if (fg > 0.01f) {
-                    val gapStartFrac = fe + 0.012f + capFrac
-                    val gapLen = (fg - 0.024f - 2 * capFrac).coerceAtLeast(0.001f)
+                    // Nothing eaten yet: the whole budget is still open, so the ring is one closed glowing
+                    // circle (no cap gap at the top, which read as a horseshoe). The colours wrap round to
+                    // the first so the seam doesn't show.
+                    val closed = fe <= 0.002f && fg >= 0.995f
+                    val gapStartFrac = if (closed) 0f else fe + 0.012f + capFrac
+                    val gapLen = if (closed) 1f else (fg - 0.024f - 2 * capFrac).coerceAtLeast(0.001f)
                     val start = -90f + gapStartFrac * 360f
                     val sweep = gapLen * 360f
-                    val shader = SweepGradient(cx, cy, gapColors.map { it.toArgb() }.toIntArray(), null)
+                    val colours = if (closed) gapColors + gapColors.first() else gapColors
+                    val shader = SweepGradient(cx, cy, colours.map { it.toArgb() }.toIntArray(), null)
+                    val cap = if (closed) Paint.Cap.BUTT else Paint.Cap.ROUND
+                    glow.strokeCap = cap
+                    arc.strokeCap = cap
                     shader.setLocalMatrix(m)
                     glow.shader = shader
                     glow.strokeWidth = sw * 1.15f
@@ -456,6 +464,8 @@ fun BalanceRing(
                     arc.shader = shader
                     nc.drawArc(oval, start, sweep, false, arc)
                     arc.shader = null
+                    glow.strokeCap = Paint.Cap.ROUND
+                    arc.strokeCap = Paint.Cap.ROUND
                 }
 
                 // Over: the overflow wraps round in red, glowing.

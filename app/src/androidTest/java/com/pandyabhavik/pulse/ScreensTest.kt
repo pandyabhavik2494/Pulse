@@ -43,7 +43,7 @@ class ScreensTest {
     private fun kg1(v: Double) = String.format(Locale.US, "%.1f", v)
 
     /** Today's tagged essentials, all on screen and whole. */
-    private val todayEssentials = listOf("balance_ring", "balance_value", "balance_label", "steps_value", "weight_trend_value", "next_milestone", "streak_chip", "win_chip")
+    private val todayEssentials = listOf("balance_ring", "balance_value", "balance_label", "steps_value", "weight_trend_value", "next_milestone", "streak_chip", "heart_resting", "sleep_value")
 
     @Test
     fun onboarding() {
@@ -85,17 +85,14 @@ class ScreensTest {
         val next = checkNotNull(s.forecast?.next)
         app.assertTagShows("next_milestone", "${F.kgShort(next.kg)} kg")
         next.projected?.let { app.assertTagShows("next_milestone", F.date(it, s.now.toLocalDate())) }
-        assertTrue("no spill line on an under day", !app.exists("spill_line"))
         assertTrue("no recap on Tuesday once dismissed", !app.exists("recap_card"))
         assertTrue("no celebration", !app.exists("celebration"))
         app.assertText("Evening, Bhavik", substring = true)
+        app.assertTagShows("heart_resting", "${TestData.RESTING_HR}")
+        app.assertTagShows("sleep_value", TestData.TODAY_SLEEP_SHORT)
         shot("05-today-under")
         app.assertNoneClipped(required = todayEssentials)
-        if (app.wide) {
-            // The second pane: burned split and the meals.
-            app.assertText("Breakfast")
-            app.assertText("Protein")
-        }
+        if (!app.wide && app.scrollDownToShow("sleep_value")) shot("05b-today-under-scrolled")
     }
 
     @Test
@@ -104,10 +101,9 @@ class ScreensTest {
         app.waitTag("balance_value")
         app.assertTagShows("balance_value", n(TestData.OVER_BY), substring = false)
         app.assertTagShows("balance_label", "kcal over", substring = false)
-        app.waitTag("spill_line")
-        app.assertTagShows("spill_line", "One day over", substring = true)
+        app.assertText("Eaten more than burned")
         shot("06-today-over")
-        app.assertNoneClipped(required = listOf("balance_ring", "balance_value", "balance_label", "spill_line", "steps_value"))
+        app.assertNoneClipped(required = listOf("balance_ring", "balance_value", "balance_label", "steps_value"))
         if (app.scrollDownToShow("weight_trend_value")) shot("07-today-over-scrolled")
     }
 
@@ -282,5 +278,42 @@ class ScreensTest {
         app.assertNoneClipped(required = listOf("settings_nudge_morning", "settings_nudge_evening"))
         app.waitText("all access allowed", substring = true)
         if (app.scrollDownToShow("settings_health")) shot("24-settings-scrolled")
+    }
+
+    /**
+     * Day one with nothing in Health Connect yet: every screen must still read sensibly, with plain
+     * "nothing yet" lines instead of numbers, and Sync now must say what happened.
+     */
+    @Test
+    fun emptyDayOne() {
+        app.open(Scene.EMPTY)
+        app.waitTag("today_screen")
+        val s = checkNotNull(app.seeded)
+        assertTrue("no days in the empty scene", s.history.all { it.steps == null && it.eaten == null && it.weightKg == null })
+        app.waitText("No food logged yet")
+        assertTrue("no balance number before any food", !app.exists("balance_value"))
+        app.assertTagShows("steps_value", "0")
+        app.assertText("No heart rate yet")
+        app.assertText("No sleep recorded last night")
+        shot("30-empty-today")
+        app.assertNoneClipped(required = listOf("balance_ring", "balance_label", "steps_value", "next_milestone", "streak_chip"))
+        if (!app.wide && app.scrollDownToShow("streak_chip")) shot("30b-empty-today-scrolled")
+
+        app.tab("journey")
+        app.waitTag("journey_screen")
+        shot("31-empty-journey")
+
+        app.tab("history")
+        app.waitTag("history_screen")
+        shot("32-empty-history")
+
+        app.tab("settings")
+        app.waitTag("settings_screen")
+        app.scrollTo("settings_sync")
+        app.click("settings_sync")
+        app.waitTag("settings_sync_note")
+        app.waitFor("the sync note") { app.textOf("settings_sync_note").contains("Synced") }
+        app.assertNotClipped("settings_sync_note")
+        shot("33-empty-settings-synced")
     }
 }

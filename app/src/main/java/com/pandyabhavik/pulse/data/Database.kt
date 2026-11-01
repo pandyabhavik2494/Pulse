@@ -10,6 +10,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
 import androidx.room.Upsert
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.pandyabhavik.pulse.core.DayLog
 import com.pandyabhavik.pulse.core.Meals
 import kotlinx.coroutines.flow.Flow
@@ -34,6 +36,10 @@ data class DayEntity(
     val snacks: Int = 0,
     val weightKg: Double? = null,
     val sleepMinutes: Int? = null,
+    val restingHr: Int? = null,
+    val hrAvg: Int? = null,
+    val hrMin: Int? = null,
+    val hrMax: Int? = null,
 ) {
     fun toDayLog() = DayLog(
         date = LocalDate.parse(date),
@@ -45,6 +51,10 @@ data class DayEntity(
         meals = Meals(breakfast, lunch, dinner, snacks),
         weightKg = weightKg,
         sleepMinutes = sleepMinutes,
+        restingHr = restingHr,
+        hrAvg = hrAvg,
+        hrMin = hrMin,
+        hrMax = hrMax,
     )
 }
 
@@ -61,6 +71,10 @@ fun DayLog.toEntity() = DayEntity(
     snacks = meals.snacks,
     weightKg = weightKg,
     sleepMinutes = sleepMinutes,
+    restingHr = restingHr,
+    hrAvg = hrAvg,
+    hrMin = hrMin,
+    hrMax = hrMax,
 )
 
 @Dao
@@ -95,12 +109,19 @@ interface DayDao {
     }
 }
 
-@Database(entities = [DayEntity::class], version = 1, exportSchema = false)
+@Database(entities = [DayEntity::class], version = 2, exportSchema = false)
 abstract class PulseDatabase : RoomDatabase() {
     abstract fun dao(): DayDao
 
     companion object {
         fun create(context: Context, name: String = "pulse.db"): PulseDatabase =
-            Room.databaseBuilder(context, PulseDatabase::class.java, name).build()
+            Room.databaseBuilder(context, PulseDatabase::class.java, name).addMigrations(V1_TO_V2).build()
+
+        /** Version 2 adds heart rate. Old days keep their data; the new columns start empty. */
+        private val V1_TO_V2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                for (c in listOf("restingHr", "hrAvg", "hrMin", "hrMax")) db.execSQL("ALTER TABLE days ADD COLUMN $c INTEGER")
+            }
+        }
     }
 }

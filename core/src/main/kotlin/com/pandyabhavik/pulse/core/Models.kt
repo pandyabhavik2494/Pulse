@@ -42,6 +42,12 @@ data class DayLog(
     val meals: Meals = Meals(),
     val weightKg: Double? = null,
     val sleepMinutes: Int? = null,
+    /** Resting heart rate (bpm) Fitbit worked out for the day. */
+    val restingHr: Int? = null,
+    /** Average, lowest and highest heart rate (bpm) recorded that day. */
+    val hrAvg: Int? = null,
+    val hrMin: Int? = null,
+    val hrMax: Int? = null,
 ) {
     /** Burned minus eaten. Positive = under (deficit), negative = over (spill-over). Null if either side is missing. */
     val balance: Int? get() = if (burnedTotal != null && eaten != null) burnedTotal - eaten else null

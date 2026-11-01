@@ -174,6 +174,9 @@ fun SettingsScreen(s: HomeState) {
 
             // ---- Health Connect
             PCard {
+                val syncing by ui.vm.syncing.collectAsStateWithLifecycle()
+                val syncNote by ui.vm.syncNote.collectAsStateWithLifecycle()
+                val failed by ui.vm.lastSyncFailed.collectAsStateWithLifecycle()
                 Lbl("Health Connect", Icons.Rounded.Favorite, C.over)
                 Spacer(Modifier.height(6.dp))
                 val (statusText, ok) = when {
@@ -193,13 +196,20 @@ fun SettingsScreen(s: HomeState) {
                         icon = Icons.Rounded.Favorite,
                     ) { ui.askHealth() }
                     PButton(
-                        "Sync now",
+                        if (syncing) "Syncing…" else "Sync now",
                         Modifier.weight(1f).testTag("settings_sync"),
                         brush = Brush.linearGradient(listOf(C.s2, C.s2)),
                         textColor = C.ink,
                         height = 44.dp,
                         icon = Icons.Rounded.Sync,
-                    ) { ui.vm.sync() }
+                    ) { ui.vm.sync(announce = true) }
+                }
+                syncNote?.let {
+                    Text(
+                        it,
+                        style = T.small.copy(color = if (failed) C.over else C.mute),
+                        modifier = Modifier.padding(top = 8.dp).testTag("settings_sync_note"),
+                    )
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {

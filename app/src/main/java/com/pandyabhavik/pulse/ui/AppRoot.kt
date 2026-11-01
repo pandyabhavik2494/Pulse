@@ -35,7 +35,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.DonutLarge
+import androidx.compose.material.icons.rounded.MonitorHeart
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Settings
@@ -77,7 +77,7 @@ import com.pandyabhavik.pulse.core.Milestone
 import com.pandyabhavik.pulse.data.HomeState
 
 enum class Tab(val key: String, val label: String, val icon: ImageVector) {
-    TODAY("today", "Today", Icons.Rounded.DonutLarge),
+    TODAY("today", "Today", Icons.Rounded.MonitorHeart),
     JOURNEY("journey", "Journey", Icons.Rounded.Insights),
     HISTORY("history", "History", Icons.Rounded.History),
 }

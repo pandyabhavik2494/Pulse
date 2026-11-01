@@ -253,6 +253,7 @@ private fun ColumnScope.ConnectStep(
         PermRow("Food · MyFitnessPal", allowed("READ_NUTRITION"))
         PermRow("Weight · scale", allowed("READ_WEIGHT"))
         PermRow("Sleep · Fitbit", allowed("READ_SLEEP"))
+        PermRow("Heart rate · Fitbit", allowed("READ_HEART_RATE", "READ_RESTING_HEART_RATE"))
         PermRow("Read in background", allowed("READ_HEALTH_DATA_IN_BACKGROUND"), divider = false)
     }
     val allHealth = hcOk && s.missingPermissions.isEmpty()

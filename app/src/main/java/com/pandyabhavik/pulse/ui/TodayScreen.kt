@@ -70,6 +70,11 @@ import com.pandyabhavik.pulse.core.WeeklyRecap
 import com.pandyabhavik.pulse.data.HealthStatus
 import com.pandyabhavik.pulse.data.HomeState
 import kotlin.math.abs
+import kotlin.math.roundToInt
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.rounded.Bedtime
 
 @Composable
 fun TodayScreen(s: HomeState) {
@@ -107,18 +112,12 @@ private fun TodayCover(s: HomeState, openSheet: () -> Unit) {
     ) {
         TodayHeader(s, showSettings = true)
         s.recap?.let { RecapCard(it, s.recapCommitted) }
-        BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            val ring = minOf(maxWidth * 0.68f, 280.dp)
-            Box(Modifier.padding(vertical = 14.dp)) {
-                RingBlock(s, ring, showHint = true, onClick = openSheet)
-            }
-        }
-        SplitLine(s)
-        if (s.isOver) SpillCard(s)
-        MotivationChips(s)
-        StepsCard(s)
-        WeightCard(s, compactNext = false)
         HealthWarning(s)
+        CaloriesSection(s, openSheet)
+        StepsSection(s)
+        WeightSection(s)
+        HeartSection(s)
+        SleepSection(s)
     }
 }
 
@@ -137,15 +136,10 @@ private fun TodayInner(s: HomeState, openSheet: () -> Unit) {
                     .padding(bottom = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    val ring = minOf(maxWidth * 0.8f, 290.dp)
-                    Box(Modifier.padding(vertical = 14.dp)) { RingBlock(s, ring, showHint = false, onClick = openSheet) }
-                }
-                SplitLine(s)
-                if (s.isOver) SpillCard(s)
-                MotivationChips(s)
-                StepsCard(s)
-                WeightCard(s, compactNext = true)
+                HealthWarning(s)
+                CaloriesSection(s, openSheet)
+                StepsSection(s)
+                HeartSection(s)
             }
             Column(
                 Modifier
@@ -155,10 +149,8 @@ private fun TodayInner(s: HomeState, openSheet: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 s.recap?.let { RecapCard(it, s.recapCommitted) }
-                BurnedCard(s)
-                EatenCard(s)
-                WeekBalanceCard(s)
-                HealthWarning(s)
+                WeightSection(s)
+                SleepSection(s)
             }
         }
     }
@@ -166,42 +158,27 @@ private fun TodayInner(s: HomeState, openSheet: () -> Unit) {
 
 // ---- Flex mode ---------------------------------------------------------------------------------
 
-/** Top half in flex mode: a big, readable status display. */
+/** Top half in flex mode: today's balance, steps and weight as three big numbers. */
 @Composable
 fun FlexStatus(s: HomeState) {
-    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        val ring = minOf(maxHeight * 0.8f, maxWidth * 0.42f, 300.dp)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(36.dp)) {
-            var sheet by rememberSaveable { mutableStateOf(false) }
-            RingBlock(s, ring, showHint = false, showKicker = false, onClick = { sheet = true })
-            if (sheet) BreakdownSheet(s) { sheet = false }
-            Column {
-                Text(F.dayShort(s.now.toLocalDate()).uppercase(), style = T.caps)
-                Spacer(Modifier.height(8.dp))
-                val steps by animateIntAsState(s.liveSteps, tween(700), label = "flex-steps")
-                Text(F.n(steps), style = T.hero.copy(fontSize = 44.sp, lineHeight = 46.sp, color = C.steps).glow(C.steps, 28f), maxLines = 1, modifier = Modifier.testTag("steps_value"))
-                Text("steps", style = T.small.copy(fontSize = 13.sp))
-                Spacer(Modifier.height(12.dp))
-                val kg = s.trendKg
-                if (kg != null) {
-                    Text(F.kg(kg), style = T.hero.copy(fontSize = 44.sp, lineHeight = 46.sp), maxLines = 1, modifier = Modifier.gradient(C.weightBrush).testTag("weight_trend_value"))
-                    val next = s.forecast?.next
-                    Text(
-                        if (next != null) "kg · ${F.kgShort(next.kg)} by ${next.projected?.let { F.date(it, s.now.toLocalDate()) } ?: "—"}" else "kg on trend",
-                        style = T.small.copy(fontSize = 13.sp),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.testTag("next_milestone"),
-                    )
-                } else {
-                    Text("Weigh in to start your trend", style = T.small.copy(fontSize = 13.sp), maxLines = 2)
-                }
-            }
+    var sheet by rememberSaveable { mutableStateOf(false) }
+    Row(
+        Modifier
+            .fillMaxSize()
+            .padding(horizontal = 28.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        BalanceCard(s, { sheet = true }, Modifier.weight(1.3f))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            StepsTile(s, Modifier.fillMaxWidth())
+            WeightTile(s, Modifier.fillMaxWidth())
         }
     }
+    if (sheet) BreakdownSheet(s) { sheet = false }
 }
 
-/** Bottom half on Today in flex mode: burned, eaten, one line, then the nav (drawn by AppRoot). */
+/** Bottom half on Today in flex mode: burned, eaten and the next milestone, then the nav (drawn by AppRoot). */
 @Composable
 private fun TodayFlexDetails(s: HomeState) {
     Column(
@@ -212,17 +189,11 @@ private fun TodayFlexDetails(s: HomeState) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            PCard(Modifier.weight(1f)) {
-                Lbl("Burned", Icons.Rounded.LocalFireDepartment, C.under)
-                Metric(s.burned?.let { F.n(it) } ?: "—", if (s.resting != null && s.active != null) "${F.n(s.resting)} + ${F.n(s.active)} active" else "kcal")
-            }
-            PCard(Modifier.weight(1f)) {
-                Lbl("Eaten", Icons.Rounded.Restaurant, C.food)
-                val meals = F.meals(s.today).size
-                Metric(s.eaten?.let { F.n(it) } ?: "—", if (s.eaten == null) "nothing logged yet" else "$meals meal${if (meals == 1) "" else "s"} logged")
-            }
+            BurnedTile(s, Modifier.weight(1f))
+            EatenTile(s, Modifier.weight(1f))
         }
-        if (s.isOver) SpillCard(s) else MotivationChips(s)
+        HeartSection(s)
+        SleepSection(s)
         s.recap?.let { RecapCard(it, s.recapCommitted) }
     }
 }
@@ -251,216 +222,413 @@ fun SyncChip(s: HomeState) {
         else -> Chip(
             F.syncAgo(s.lastSync, s.now),
             dot = if (failed) C.over else C.under,
-            onClick = { ui.vm.sync() },
+            onClick = { ui.vm.sync(announce = true) },
         )
     }
 }
 
 /** The balance ring with its centre text. Tapping opens the breakdown. */
+/**
+ * Today's one big number: burned minus eaten, in plain words. Below it the sum it comes from. Tapping
+ * opens the breakdown. Before any food is logged it says so instead of showing a number.
+ */
 @Composable
-private fun RingBlock(s: HomeState, size: Dp, showHint: Boolean, showKicker: Boolean = true, onClick: () -> Unit) {
+private fun BalanceCard(s: HomeState, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val balance = s.balance
     val over = s.isOver
-    val shown by animateIntAsState(abs(balance ?: 0), tween(1000), label = "balance")
     val color = if (over) C.over else C.under
-    BalanceRing(
-        burned = s.burned,
-        eaten = s.eaten,
-        style = s.ringStyle,
-        size = size,
-        modifier = Modifier
-            .clip(CircleShape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                role = Role.Button,
-                onClickLabel = "Show the breakdown",
-            ) { onClick() }
-            .testTag("balance_ring"),
+    val shown by animateIntAsState(abs(balance ?: 0), tween(700), label = "balance")
+    PCard(
+        modifier.testTag("balance_ring"),
+        borderColor = if (balance == null) C.line else color.copy(alpha = 0.28f),
+        background = if (balance == null) null else Brush.verticalGradient(listOf(color.copy(alpha = 0.10f), Color.Transparent)),
+        onClick = onClick,
     ) {
-        Column(
-            Modifier.padding(horizontal = size * 0.14f),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            if (showKicker) Text("TODAY", style = T.caps.copy(letterSpacing = 1.6.sp))
-            if (balance != null) {
-                val text = F.n(shown)
-                val base = (size.value * 0.215f).coerceAtMost(64f)
+        Lbl("Today's balance", Icons.Rounded.LocalFireDepartment, if (balance == null) C.mute else color) {
+            Text("Details", style = T.small.copy(color = C.mute), maxLines = 1)
+        }
+        if (balance != null) {
+            Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.Bottom) {
                 Text(
-                    text,
-                    style = T.hero.copy(
-                        fontSize = ringNumberSize(F.n(abs(balance)), base).sp,
-                        lineHeight = (ringNumberSize(F.n(abs(balance)), base) * 1.05f).sp,
-                    ).glow(color),
+                    F.n(shown),
+                    style = T.hero.copy(fontSize = 48.sp, lineHeight = 52.sp, letterSpacing = 0.sp, color = color),
                     maxLines = 1,
                     softWrap = false,
                     modifier = Modifier.testTag("balance_value"),
                 )
+                Spacer(Modifier.width(8.dp))
                 Text(
                     if (over) "kcal over" else "kcal under",
-                    style = T.label.copy(fontSize = 15.sp).glow(color, 24f),
+                    style = T.label.copy(fontSize = 17.sp, color = color),
                     maxLines = 1,
-                    modifier = Modifier.testTag("balance_label"),
-                )
-            } else {
-                Text("—", style = T.hero.copy(fontSize = (size.value * 0.2f).coerceAtMost(56f).sp, color = C.mute), maxLines = 1)
-                Text(
-                    if (s.burned == null) "Waiting for Fitbit" else "No food logged yet",
-                    style = T.label.copy(color = C.mute),
-                    maxLines = 1,
-                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 7.dp).testTag("balance_label"),
                 )
             }
-            if (showHint) {
-                Spacer(Modifier.height(6.dp))
-                Text("Tap for the breakdown", style = T.small, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
+        } else {
+            Text(
+                if (s.burned == null) "Waiting for Fitbit" else "No food logged yet",
+                style = T.title.copy(color = C.ink),
+                maxLines = 1,
+                modifier = Modifier.padding(top = 8.dp).testTag("balance_label"),
+            )
+        }
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(color = C.ink, fontWeight = FontWeight(700))) { append(s.burned?.let { F.n(it) } ?: "—") }
+                append(" burned  −  ")
+                withStyle(SpanStyle(color = C.ink, fontWeight = FontWeight(700))) { append(s.eaten?.let { F.n(it) } ?: "0") }
+                append(" eaten")
+            },
+            style = T.small.copy(fontSize = 13.sp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
+}
+
+/** One number in a small card: label, value, a short line under it. */
+@Composable
+private fun Tile(
+    label: String,
+    icon: ImageVector,
+    color: Color,
+    value: String,
+    sub: String,
+    modifier: Modifier = Modifier,
+    valueTag: String? = null,
+    valueColor: Color = C.ink,
+    bar: Float? = null,
+    trailing: (@Composable RowScope.() -> Unit)? = null,
+) {
+    PCard(modifier, padding = 14.dp) {
+        Lbl(label, icon, color, trailing = trailing)
+        Text(
+            value,
+            style = T.metric.copy(fontSize = 26.sp, lineHeight = 30.sp, letterSpacing = 0.sp, color = valueColor),
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.padding(top = 6.dp).then(if (valueTag != null) Modifier.testTag(valueTag) else Modifier),
+        )
+        Text(sub, style = T.small, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+        if (bar != null) {
+            Spacer(Modifier.height(8.dp))
+            GlowBar(bar, listOf(color), height = 6.dp, glow = false)
         }
     }
 }
 
 @Composable
-private fun SplitLine(s: HomeState) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-        SplitPart(s.burned, "burned")
-        Spacer(Modifier.width(20.dp))
-        SplitPart(s.eaten, "eaten")
-    }
-}
-
-@Composable
-private fun SplitPart(v: Int?, what: String) {
-    val n by animateIntAsState(v ?: 0, tween(900), label = "split-$what")
-    Text(
-        buildAnnotatedString {
-            withStyle(SpanStyle(color = C.ink, fontWeight = FontWeight(700))) { append(if (v == null) "—" else F.n(n)) }
-            append(" $what")
+private fun BurnedTile(s: HomeState, modifier: Modifier = Modifier) {
+    Tile(
+        "Burned", Icons.Rounded.LocalFireDepartment, C.under,
+        s.burned?.let { F.n(it) } ?: "—",
+        when {
+            s.burned == null -> "waiting for Fitbit"
+            s.active != null -> "kcal · ${F.n(s.active)} active"
+            else -> "kcal so far"
         },
-        style = T.small.copy(fontSize = 13.sp),
-        maxLines = 1,
+        modifier,
     )
 }
 
 @Composable
-private fun SpillCard(s: HomeState) {
-    val overBy = -(s.balance ?: 0)
-    PCard(borderColor = C.over.copy(alpha = 0.18f)) {
-        LineNote(Icons.Rounded.Favorite, C.mute) {
+private fun EatenTile(s: HomeState, modifier: Modifier = Modifier) {
+    val meals = F.meals(s.today).size
+    Tile(
+        "Eaten", Icons.Rounded.Restaurant, C.food,
+        s.eaten?.let { F.n(it) } ?: "—",
+        when {
+            s.eaten == null -> "nothing logged"
+            meals > 0 -> "kcal · $meals meal${if (meals == 1) "" else "s"}"
+            else -> "kcal"
+        },
+        modifier,
+    )
+}
+
+@Composable
+private fun StepsTile(s: HomeState, modifier: Modifier = Modifier) {
+    val goal = s.profile?.stepGoal ?: 10_000
+    val steps by animateIntAsState(s.liveSteps, tween(600), label = "steps")
+    Tile(
+        "Steps", Icons.AutoMirrored.Rounded.DirectionsWalk, C.steps,
+        F.n(steps),
+        "of ${F.n(goal)}",
+        modifier,
+        valueTag = "steps_value",
+        bar = s.liveSteps.toFloat() / goal.coerceAtLeast(1),
+        trailing = { if (s.liveActive) LivePill() },
+    )
+}
+
+@Composable
+private fun WeightTile(s: HomeState, modifier: Modifier = Modifier) {
+    val p = s.profile
+    val kg = s.trendKg
+    val today = s.now.toLocalDate()
+    Tile(
+        "Weight", Icons.Rounded.MonitorWeight, C.wt,
+        kg?.let { F.kg(it) } ?: "—",
+        when {
+            kg == null -> "no weigh-in yet"
+            p == null -> "kg"
+            else -> "kg · ${F.signedKg(kg - p.startKg)} since ${F.date(p.startDate, today)}"
+        },
+        modifier,
+        valueTag = "weight_trend_value",
+    )
+}
+
+// ---- Sections ----------------------------------------------------------------------------------
+// Today is five plain sections: Calories, Steps, Weight, Heart rate, Sleep. Each has one big number,
+// at most one simple bar, and a few labelled rows. Nothing else.
+
+/** A section card: icon + title (+ something on the right), then its content. */
+@Composable
+private fun Section(
+    title: String,
+    icon: ImageVector,
+    color: Color,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    trailing: (@Composable RowScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    PCard(modifier, onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(30.dp).clip(CircleShape).background(color.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) { Icon(icon, null, tint = color, modifier = Modifier.size(18.dp)) }
+            Spacer(Modifier.width(10.dp))
+            Text(title, style = T.h3.copy(fontSize = 17.sp), maxLines = 1, modifier = Modifier.weight(1f))
+            if (trailing != null) trailing()
+        }
+        content()
+    }
+}
+
+/** The section's main number with its unit beside it. */
+@Composable
+private fun BigValue(value: String, unit: String?, color: Color = C.ink, valueTag: String? = null, unitTag: String? = null) {
+    Row(Modifier.padding(top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.Bottom) {
+        Text(
+            value,
+            style = T.hero.copy(fontSize = 40.sp, lineHeight = 44.sp, letterSpacing = 0.sp, color = color),
+            maxLines = 1,
+            softWrap = false,
+            modifier = if (valueTag != null) Modifier.testTag(valueTag) else Modifier,
+        )
+        if (unit != null) {
+            Spacer(Modifier.width(8.dp))
             Text(
-                Motivation.spillLine(overBy, s.avg7),
-                style = T.body.copy(color = C.soft, fontSize = 13.5.sp),
-                modifier = Modifier.testTag("spill_line"),
+                unit,
+                style = T.label.copy(fontSize = 16.sp, color = if (color == C.ink) C.mute else color),
+                maxLines = 1,
+                modifier = Modifier.padding(bottom = 5.dp).then(if (unitTag != null) Modifier.testTag(unitTag) else Modifier),
             )
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/** A short plain line in place of a number when there's no data yet. */
 @Composable
-private fun MotivationChips(s: HomeState) {
-    FlowRow(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+private fun EmptyLine(title: String, detail: String, titleTag: String? = null) {
+    Text(
+        title,
+        style = T.title.copy(fontSize = 19.sp),
+        modifier = Modifier.padding(top = 12.dp).then(if (titleTag != null) Modifier.testTag(titleTag) else Modifier),
+    )
+    Text(detail, style = T.small.copy(fontSize = 13.sp), modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+}
+
+/** Mean of the non-null values, rounded, or null when there are none. */
+private fun List<Int?>.avgOrNull(): Int? = filterNotNull().takeIf { it.isNotEmpty() }?.average()?.roundToInt()
+
+@Composable
+private fun CaloriesSection(s: HomeState, onClick: () -> Unit) {
+    val balance = s.balance
+    val color = if (s.isOver) C.over else C.under
+    val shown by animateIntAsState(abs(balance ?: 0), tween(700), label = "balance")
+    Section(
+        "Calories", Icons.Rounded.LocalFireDepartment, C.under,
+        Modifier.testTag("balance_ring"),
+        onClick = onClick,
+        trailing = { Text("Details", style = T.small, maxLines = 1) },
     ) {
-        val streak = s.streak
-        Chip(
-            when (streak) {
+        if (balance != null) {
+            BigValue(F.n(shown), if (s.isOver) "kcal over" else "kcal under", color, "balance_value", "balance_label")
+            // Eaten as a share of burned: the empty part is the deficit; full and red means over.
+            val burned = s.burned ?: 0
+            val frac = if (burned > 0) (s.eaten ?: 0).toFloat() / burned else 0f
+            GlowBar(frac, listOf(if (s.isOver) C.over else C.food), height = 8.dp, glow = false)
+            Text(
+                if (s.isOver) "Eaten more than burned" else "${F.n(balance)} kcal left before you'd be over",
+                style = T.small,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
+            )
+        } else {
+            EmptyLine(
+                if (s.burned == null) "Waiting for Fitbit" else "No food logged yet",
+                if (s.burned == null) "Burned calories appear when your Fitbit syncs." else "Your balance shows once MyFitnessPal logs a meal.",
+                titleTag = "balance_label",
+            )
+        }
+        FieldRow(
+            "Burned",
+            s.burned?.let { "${F.n(it)} kcal" } ?: "—",
+            note = if (s.resting != null && s.active != null) "(${F.n(s.active)} active)" else null,
+        )
+        val meals = F.meals(s.today).size
+        FieldRow(
+            "Eaten",
+            s.eaten?.let { "${F.n(it)} kcal" } ?: "nothing yet",
+            valueColor = if (s.eaten == null) C.mute else C.ink,
+            note = if (s.eaten != null && meals > 0) "($meals meal${if (meals == 1) "" else "s"})" else null,
+        )
+        val avg = s.avg7
+        FieldRow(
+            "7-day average",
+            avg?.let { "${F.balanceShort(it)} a day" } ?: "—",
+            valueColor = when {
+                avg == null -> C.mute
+                avg >= 0 -> C.under
+                else -> C.over
+            },
+        )
+        FieldRow(
+            "Streak",
+            when (s.streak) {
                 0 -> "Start a streak today"
                 1 -> "1 day under"
-                else -> "$streak days under in a row"
+                else -> "${s.streak} days under in a row"
             },
-            icon = Icons.Rounded.LocalFireDepartment,
-            color = C.hot,
-            background = C.hot.copy(alpha = 0.13f),
-            modifier = Modifier.testTag("streak_chip"),
-        )
-        val toWin = s.toNextWin
-        Chip(
-            if (toWin != null) "${F.kg(toWin)} kg to your next win" else "Weigh in to unlock wins",
-            icon = Icons.Rounded.Bolt,
-            color = C.wt,
-            background = C.wt.copy(alpha = 0.13f),
-            modifier = Modifier.testTag("win_chip"),
+            Modifier.testTag("streak_chip"),
+            valueColor = if (s.streak > 0) C.hot else C.mute,
+            divider = false,
         )
     }
 }
 
 @Composable
-private fun StepsCard(s: HomeState) {
+private fun StepsSection(s: HomeState) {
     val goal = s.profile?.stepGoal ?: 10_000
-    val steps by animateIntAsState(s.liveSteps, tween(700), label = "steps")
-    PCard {
-        Lbl("Steps", Icons.AutoMirrored.Rounded.DirectionsWalk, C.steps) {
-            if (s.liveActive) LivePill()
-        }
-        Metric(F.n(steps), "/ ${F.n(goal)}", valueModifier = Modifier.testTag("steps_value"))
-        GlowBar(s.liveSteps.toFloat() / goal.coerceAtLeast(1), listOf(C.steps))
+    val steps by animateIntAsState(s.liveSteps, tween(600), label = "steps")
+    Section(
+        "Steps", Icons.AutoMirrored.Rounded.DirectionsWalk, C.steps,
+        trailing = { if (s.liveActive) LivePill() },
+    ) {
+        BigValue(F.n(steps), "of ${F.n(goal)}", C.ink, "steps_value")
+        GlowBar(s.liveSteps.toFloat() / goal.coerceAtLeast(1), listOf(C.steps), height = 8.dp, glow = false)
+        Spacer(Modifier.height(4.dp))
+        val left = goal - s.liveSteps
+        FieldRow("To go", if (left > 0) F.n(left) else "Goal done", valueColor = if (left > 0) C.ink else C.under)
+        val avg = s.history.drop(1).take(7).map { it.steps }.avgOrNull()
+        FieldRow("7-day average", avg?.let { F.n(it) } ?: "—", valueColor = if (avg == null) C.mute else C.ink, divider = false)
     }
 }
 
 @Composable
-private fun WeightCard(s: HomeState, compactNext: Boolean) {
+private fun WeightSection(s: HomeState) {
     val p = s.profile ?: return
     val kg = s.trendKg
     val today = s.now.toLocalDate()
-    PCard {
-        Lbl("Weight trend", Icons.Rounded.MonitorWeight, C.wt)
+    val lastWeighIn = s.history.firstOrNull { it.weightKg != null }
+    Section("Weight", Icons.Rounded.MonitorWeight, C.wt) {
         if (kg == null) {
-            Spacer(Modifier.height(6.dp))
-            Text("Step on the scale to start your trend line.", style = T.body)
-            Text("Pulse smooths weigh-ins, so one salty dinner never ruins a morning.", style = T.small, modifier = Modifier.padding(top = 4.dp))
-            return@PCard
-        }
-        val next = s.forecast?.next
-        val nextText = when {
-            next == null -> "Goal reached"
-            next.projected != null -> "${F.kgShort(next.kg)} kg · ${F.date(next.projected!!, today)}"
-            else -> "${F.kgShort(next.kg)} kg"
-        }
-        val change = kg - p.startKg
-        Metric(
-            F.kg(kg),
-            null,
-            brush = C.weightBrush,
-            valueModifier = Modifier.testTag("weight_trend_value"),
-        ) {
+            EmptyLine("No weigh-in yet", "Step on your VeSync scale. Pulse uses a smoothed trend, so one heavy morning doesn't count.")
+        } else {
+            BigValue(F.kg(kg), "kg trend", C.wt, "weight_trend_value")
+            val change = kg - p.startKg
             Text(
-                buildAnnotatedString {
-                    append("kg · ")
-                    if (compactNext) {
-                        append("next ")
-                        withStyle(SpanStyle(color = C.ink, fontWeight = FontWeight(700))) { append(nextText) }
-                    } else {
-                        withStyle(SpanStyle(color = if (change <= 0) C.under else C.mute)) {
-                            append("${F.signedKg(change)} since ${F.date(p.startDate, today)}")
-                        }
-                    }
-                },
-                style = T.small.copy(fontSize = 13.sp),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = if (compactNext) Modifier.testTag("next_milestone") else Modifier,
+                "${F.signedKg(change)} kg since ${F.date(p.startDate, today)}",
+                style = T.small.copy(fontSize = 13.sp, color = if (change <= 0) C.under else C.mute),
+                modifier = Modifier.padding(bottom = 8.dp),
             )
-        }
-        val target = next?.kg ?: p.goalKg
-        val span = (p.startKg - target).coerceAtLeast(0.1)
-        GlowBar(((p.startKg - kg) / span).toFloat(), listOf(C.wt, C.wt2))
-        if (!compactNext) {
-            Row(Modifier.fillMaxWidth().padding(top = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(F.kgShort(p.startKg), style = T.small, modifier = Modifier.weight(1f))
-                Text(
-                    buildAnnotatedString {
-                        append(if (next == null) "" else "Next: ")
-                        withStyle(SpanStyle(fontWeight = FontWeight(800))) { append(nextText) }
-                    },
-                    style = T.small.copy(color = C.ink),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.testTag("next_milestone"),
-                )
+            val span = (p.startKg - p.goalKg).coerceAtLeast(0.1)
+            GlowBar(((p.startKg - kg) / span).toFloat(), listOf(C.wt, C.wt2), height = 8.dp, glow = false)
+            Row(Modifier.fillMaxWidth().padding(top = 5.dp)) {
+                Text("${F.kgShort(p.startKg)} kg", style = T.small, modifier = Modifier.weight(1f))
+                Text("Goal ${F.kgShort(p.goalKg)} kg", style = T.small)
             }
         }
+        Spacer(Modifier.height(4.dp))
+        FieldRow(
+            "Last weigh-in",
+            lastWeighIn?.let { "${F.kg(it.weightKg!!)} kg" } ?: "—",
+            valueColor = if (lastWeighIn == null) C.mute else C.ink,
+            note = lastWeighIn?.let { if (it.date == today) "today" else F.date(it.date, today) },
+        )
+        val f = s.forecast
+        val next = f?.next
+        FieldRow(
+            "Next milestone",
+            when {
+                f == null -> "—"
+                next == null -> "Goal reached"
+                else -> "${F.kgShort(next.kg)} kg · ${next.projected?.let { F.date(it, today) } ?: "no date yet"}"
+            },
+            Modifier.testTag("next_milestone"),
+            valueColor = C.wt,
+        )
+        FieldRow(
+            "Goal ${F.kgShort(p.goalKg)} kg",
+            when {
+                f == null -> "—"
+                next == null -> "Reached"
+                else -> f.goal.projected?.let { F.date(it, today) } ?: "no date yet"
+            },
+            divider = false,
+        )
+    }
+}
+
+@Composable
+private fun HeartSection(s: HomeState) {
+    val today = s.now.toLocalDate()
+    // Fitbit works out resting heart rate after a night's data, so the latest one may be yesterday's.
+    val resting = s.history.take(3).firstOrNull { it.restingHr != null }
+    val day = s.today
+    Section("Heart rate", Icons.Rounded.Favorite, C.over) {
+        if (resting == null && day.hrAvg == null) {
+            EmptyLine("No heart rate yet", "It appears here when your Fitbit syncs to Health Connect.")
+            return@Section
+        }
+        if (resting != null) {
+            BigValue("${resting.restingHr}", "bpm resting", C.ink, "heart_resting")
+        } else {
+            BigValue("${day.hrAvg}", "bpm average", C.ink, "heart_resting")
+        }
+        if (resting != null && resting.date != today) {
+            Text("from ${F.date(resting.date, today)}", style = T.small, modifier = Modifier.padding(bottom = 4.dp))
+        }
+        Spacer(Modifier.height(4.dp))
+        FieldRow("Today's average", day.hrAvg?.let { "$it bpm" } ?: "—", valueColor = if (day.hrAvg == null) C.mute else C.ink)
+        FieldRow(
+            "Today's range",
+            if (day.hrMin != null && day.hrMax != null) "${day.hrMin}–${day.hrMax} bpm" else "—",
+            valueColor = if (day.hrMin == null) C.mute else C.ink,
+            divider = false,
+        )
+    }
+}
+
+@Composable
+private fun SleepSection(s: HomeState) {
+    val night = s.today.sleepMinutes
+    val avg = s.history.take(7).map { it.sleepMinutes }.avgOrNull()
+    Section("Sleep", Icons.Rounded.Bedtime, C.sleep) {
+        if (night == null) {
+            EmptyLine("No sleep recorded last night", "Wear your Fitbit to bed and it shows here in the morning.")
+        } else {
+            BigValue("${night / 60} h ${night % 60} m", "last night", C.ink, "sleep_value")
+            GlowBar(night / 480f, listOf(C.sleep), height = 8.dp, glow = false)
+            Spacer(Modifier.height(4.dp))
+        }
+        FieldRow("7-night average", avg?.let { F.sleep(it) } ?: "—", valueColor = if (avg == null) C.mute else C.ink, divider = false)
     }
 }
 
@@ -478,111 +646,6 @@ private fun HealthWarning(s: HomeState) {
                 },
                 style = T.body.copy(fontSize = 13.5.sp),
             )
-        }
-    }
-}
-
-@Composable
-fun BurnedCard(s: HomeState) {
-    PCard {
-        Lbl("Burned", Icons.Rounded.LocalFireDepartment, C.under)
-        val burned = s.burned
-        if (burned == null) {
-            Text("Waiting for your Fitbit to sync.", style = T.body, modifier = Modifier.padding(top = 8.dp))
-            return@PCard
-        }
-        Metric(F.n(burned), "kcal from Fitbit")
-        if (s.resting != null && s.active != null) {
-            SplitBar(s.resting, s.active)
-            Row(Modifier.fillMaxWidth().padding(top = 7.dp)) {
-                Text(
-                    buildAnnotatedString {
-                        withStyle(SpanStyle(color = C.ink, fontWeight = FontWeight(700))) { append(F.n(s.resting)) }
-                        append(" resting")
-                    },
-                    style = T.small, modifier = Modifier.weight(1f), maxLines = 1,
-                )
-                Text(
-                    buildAnnotatedString {
-                        withStyle(SpanStyle(color = C.under, fontWeight = FontWeight(700))) { append(F.n(s.active)) }
-                        append(" active")
-                    },
-                    style = T.small, maxLines = 1,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun EatenCard(s: HomeState) {
-    PCard {
-        Lbl("Eaten · MyFitnessPal", Icons.Rounded.Restaurant, C.food)
-        val meals = F.meals(s.today)
-        if (s.eaten == null || meals.isEmpty()) {
-            Text(
-                if (s.eaten == null) "Nothing logged yet today. Meals appear here as MyFitnessPal syncs." else "${F.n(s.eaten)} kcal logged.",
-                style = T.body,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        } else {
-            Spacer(Modifier.height(4.dp))
-            meals.forEachIndexed { i, (name, kcal) ->
-                FieldRow(name, F.n(kcal), divider = i < meals.lastIndex || s.today.proteinG != null)
-            }
-        }
-        s.today.proteinG?.let { FieldRow("Protein", "$it g", valueColor = C.mute, divider = false) }
-    }
-}
-
-/** Seven days of balance bars around a zero line: mint up for under, red down for over. */
-@Composable
-private fun WeekBalanceCard(s: HomeState) {
-    val days = s.history.take(7).reversed()
-    PCard {
-        Lbl("This week's balance")
-        if (days.none { it.balance != null }) {
-            Text("Bars appear once a few days have food logged.", style = T.body, modifier = Modifier.padding(top = 8.dp))
-            return@PCard
-        }
-        val maxAbs = days.maxOf { abs(it.balance ?: 0) }.coerceAtLeast(600).toFloat()
-        val grow by animateFloatAsState(1f, tween(900), label = "week")
-        Canvas(
-            Modifier
-                .fillMaxWidth()
-                .height(110.dp)
-                .padding(top = 10.dp),
-        ) {
-            val mid = size.height * 0.62f
-            val up = mid - 4f
-            val down = size.height - mid - 4f
-            drawLine(Color(0xFF2A2F3D), Offset(0f, mid), Offset(size.width, mid), strokeWidth = 1.5f)
-            val slot = size.width / 7f
-            val bw = minOf(slot * 0.55f, 30.dp.toPx())
-            days.forEachIndexed { i, d ->
-                val b = d.balance ?: return@forEachIndexed
-                val x = i * slot + (slot - bw) / 2f
-                val h = (abs(b) / maxAbs) * (if (b >= 0) up else down) * grow
-                val c = if (b >= 0) C.under else C.over
-                val alpha = if (i == days.lastIndex) 1f else 0.75f
-                val top = if (b >= 0) mid - h else mid
-                drawRoundRect(
-                    c.copy(alpha = alpha),
-                    topLeft = Offset(x, top),
-                    size = Size(bw, h.coerceAtLeast(2f)),
-                    cornerRadius = CornerRadius(7.dp.toPx(), 7.dp.toPx()),
-                )
-            }
-        }
-        Row(Modifier.fillMaxWidth()) {
-            days.forEachIndexed { i, d ->
-                Text(
-                    F.weekdayShort.format(d.date).take(1),
-                    style = T.small.copy(color = if (i == days.lastIndex) C.ink else C.dim, fontWeight = FontWeight(700)),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f),
-                )
-            }
         }
     }
 }
