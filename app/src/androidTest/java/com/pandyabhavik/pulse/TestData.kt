@@ -613,9 +613,10 @@ class AppDriver(val compose: ComposeTestRule) {
             // Width overflow or an ellipsis is a real cut. Height "overflow" is not: big display numbers use a
             // line height tighter than the font's ascent + descent, which Compose reports as overflow while
             // drawing the glyphs in full.
-            // didOverflowWidth is unreliable with negative letter spacing and glow shadows, so measure the drawn lines.
+            // didOverflowWidth is unreliable with negative letter spacing and glow shadows, so measure each drawn line's
+            // width (not its position: end-aligned text sits in a paragraph wider than the wrapped node).
             val cut = layout != null && (0 until layout.lineCount).any {
-                layout.isLineEllipsized(it) || layout.getLineRight(it) > layout.size.width + 2f || layout.getLineLeft(it) < -2f
+                layout.isLineEllipsized(it) || layout.getLineRight(it) - layout.getLineLeft(it) > layout.size.width + 2f
             }
             if (layout != null && cut) {
                 problems += "text '${shown(node).joinToString()}' overflows (ellipsised or cut: ${layout.size} in ${layout.layoutInput.constraints})"
