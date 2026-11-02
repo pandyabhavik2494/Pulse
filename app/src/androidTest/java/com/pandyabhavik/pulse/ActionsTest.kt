@@ -69,8 +69,8 @@ class ActionsTest {
         assertEquals(85.0, p.goalKg, 0.05)
         app.waitTag("today_screen", 20_000)
         // The first sync ran over the fake: today's numbers are in.
-        app.waitTag("balance_value", 15_000)
-        app.assertTagShows("balance_value", n(TestData.TODAY_BALANCE), substring = false)
+        app.waitTag("dash_value_calories", 15_000)
+        app.waitFor("today's balance on the dashboard", 15_000) { norm(app.textOf("dash_value_calories")) == n(TestData.TODAY_BALANCE) }
         shot("41-onboarding-saved-today")
 
         app.relaunch()
@@ -201,10 +201,10 @@ class ActionsTest {
     @Test
     fun syncWithNewDataUpdatesBalanceAndForecast() {
         app.open(Scene.UNDER)
-        app.waitTag("balance_value")
-        app.assertTagShows("balance_value", n(TestData.TODAY_BALANCE), substring = false)
+        app.waitTag("dash_value_calories")
+        app.assertTagShows("dash_value_calories", n(TestData.TODAY_BALANCE), substring = false)
         val before = app.state()
-        val beforeTrend = app.textOf("weight_trend_value")
+        val beforeTrend = app.textOf("dash_value_weight_trend")
         shot("51-before-sync")
 
         // A 300 kcal snack logged, a lighter weigh-in this morning, and yesterday's dinner corrected down.
@@ -219,11 +219,11 @@ class ActionsTest {
         assertTrue("sync over the fake should succeed", runBlocking { app.repo.sync() })
         val after = app.state()
         assertEquals(TestData.TODAY_BURNED - 2260, after.balance)
-        app.waitFor("the balance to update to 220") { norm(app.textOf("balance_value")) == n(220) }
+        app.waitFor("the balance to update to 220") { norm(app.textOf("dash_value_calories")) == n(220) }
         val newTrend = checkNotNull(after.trendKg)
         assertTrue("trend should drop with the lighter weigh-in", newTrend < checkNotNull(before.trendKg))
-        app.waitFor("the trend to update") { app.textOf("weight_trend_value").contains(kg1(newTrend)) }
-        assertNotEquals(beforeTrend, app.textOf("weight_trend_value"))
+        app.waitFor("the trend to update") { app.textOf("dash_value_weight_trend").contains(kg1(newTrend)) }
+        assertNotEquals(beforeTrend, app.textOf("dash_value_weight_trend"))
         val nextBefore = before.forecast?.next?.projected
         val nextAfter = after.forecast?.next?.projected
         assertNotNull(nextAfter)
@@ -264,29 +264,29 @@ class ActionsTest {
         app.click("dashboard_edit")
         app.waitTag("dashboard_sheet")
         shot("54-dashboard-customize")
-        // Drop Sleep, add HRV and distance.
+        // Drop Sleep, add "In 2 weeks" and HRV.
         app.scrollTo("dash_opt_sleep")
         app.click("dash_opt_sleep")
-        app.scrollTo("dash_opt_distance")
-        app.click("dash_opt_distance")
+        app.scrollTo("dash_opt_in_2_weeks")
+        app.click("dash_opt_in_2_weeks")
         app.scrollTo("dash_opt_hrv")
         app.click("dash_opt_hrv")
         app.scrollTo("dashboard_save")
         app.click("dashboard_save")
         app.waitGone("dashboard_sheet")
-        val want = listOf("calories", "left_to_eat", "steps", "weight", "in_2_weeks", "resting_hr", "burned", "distance", "hrv")
+        val want = com.pandyabhavik.pulse.data.Settings.DEFAULT_DASHBOARD - "sleep" + "in_2_weeks" + "hrv"
         app.waitFor("the dashboard choice to be saved") { app.settings().dashboard == want }
         app.waitTag("dash_hrv")
         assertFalse(app.exists("dash_sleep"))
         app.assertTagShows("dash_hrv", "${app.state().history.take(7).firstNotNullOf { it.hrvMs }} ms")
-        app.assertNoneClipped(listOf("dash_hrv", "dash_distance", "dash_calories"))
+        app.assertNoneClipped(listOf("dash_hrv", "dash_in_2_weeks", "dash_calories"))
         shot("55-dashboard-customized")
 
         app.relaunch()
         app.waitTag("dash_hrv")
         assertFalse(app.exists("dash_sleep"))
 
-        // Reset puts the default six back.
+        // Reset puts the default twelve back.
         app.click("dashboard_edit")
         app.waitTag("dashboard_sheet")
         app.scrollTo("dashboard_reset")
@@ -322,6 +322,7 @@ class ActionsTest {
     @Test
     fun heartShowsTheNewestReading() {
         app.open(Scene.UNDER)
+        app.openSection("section_heart")
         app.waitTag("heart_resting")
         val today = TestData.NOW.toLocalDate()
         TestData.health.days = TestData.daysFor(Scene.UNDER).map {

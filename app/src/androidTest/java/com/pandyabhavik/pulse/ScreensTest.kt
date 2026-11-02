@@ -42,8 +42,16 @@ class ScreensTest {
 
     private fun kg1(v: Double) = String.format(Locale.US, "%.1f", v)
 
-    /** Today's tagged essentials, all on screen and whole. */
-    private val todayEssentials = listOf("balance_value", "balance_label", "steps_value", "weight_value", "weight_trend_value", "next_milestone", "streak_chip", "heart_resting", "sleep_value")
+    /** The default dashboard tiles (Bhavik's 12). */
+    private val defaultTiles = com.pandyabhavik.pulse.data.Settings.DEFAULT_DASHBOARD.map { "dash_$it" }
+
+    /** No status on the dashboard may use alarming words (Bhavik: encouraging, never scary). */
+    private fun assertCalm() {
+        val words = defaultTiles.filter { app.exists(it) }.joinToString(" ") { app.textOf(it) } + " " + app.textOf("verdict")
+        for (bad in listOf("over budget", "needs work", "too high", "warning", "bad", "past budget")) {
+            assertTrue("'$bad' should not appear on the dashboard: $words", !words.contains(bad, ignoreCase = true))
+        }
+    }
 
     @Test
     fun onboarding() {
@@ -73,30 +81,45 @@ class ScreensTest {
     fun todayUnder() {
         app.open(Scene.UNDER)
         app.waitTag("today_screen")
-        app.waitTag("balance_value")
-        // Burned 2,480 - eaten 1,960 = 520 under, as in the approved mock.
+        app.waitTag("dashboard")
+        app.waitTag("verdict")
+        val s = checkNotNull(app.seeded)
+        // The dashboard is the page now: Bhavik's 12 numbers, each with a calm status.
+        for (t in defaultTiles) app.waitTag(t)
+        app.assertTagShows("dash_value_calories", n(TestData.TODAY_BALANCE), substring = false)
+        app.assertTagShows("dash_calories", "burned more than eaten")
+        app.assertTagShows("dash_value_steps", n(TestData.TODAY_STEPS), substring = false)
+        app.assertTagShows("dash_value_weight", kg1(checkNotNull(s.history.first { it.weightKg != null }.weightKg)), substring = false)
+        app.assertTagShows("dash_value_weight_trend", kg1(checkNotNull(s.trendKg)), substring = false)
+        app.assertTagShows("dash_value_resting_only", "${TestData.RESTING_HR}", substring = false)
+        app.assertTagShows("dash_value_sleep", TestData.TODAY_SLEEP_SHORT, substring = false)
+        // Statuses follow core/Mood.kt: burned more than eaten is on track.
+        app.assertTagShows("dash_status_calories", "On track", substring = false)
+        app.assertTagShows("verdict_count_good", "on track")
+        assertCalm()
+        assertTrue("sections live behind the tiles now", !app.exists("balance_ring") || app.wide)
+        shot("05-today-under")
+        app.assertNoneClipped(required = listOf("verdict", "dash_burned", "dash_eaten"))
+        // A tile opens its section, already expanded.
+        app.openSection("balance_ring")
         app.assertTagShows("balance_value", n(TestData.TODAY_BALANCE), substring = false)
         app.assertTagShows("balance_label", "burned more than eaten", substring = false)
-        app.assertTagShows("steps_value", n(TestData.TODAY_STEPS))
-        val s = checkNotNull(app.seeded)
-        app.assertTagShows("weight_trend_value", kg1(checkNotNull(s.trendKg)))
-        app.assertTagShows("weight_value", kg1(checkNotNull(s.history.first { it.weightKg != null }.weightKg)), substring = false)
-        assertTrue("sections start collapsed", !app.exists("streak_chip") && !app.exists("next_milestone"))
-        app.assertTagShows("heart_resting", "${TestData.RESTING_HR}")
-        app.assertTagShows("sleep_value", TestData.TODAY_SLEEP_SHORT)
-        app.waitTag("dashboard")
-        shot("05-today-under")
         app.expand("balance_ring", "streak_chip")
-        app.expand("section_body", "next_milestone")
         app.assertTagShows("streak_chip", "${s.streak} days in a row")
         assertTrue("streak should run across the whole month, was ${s.streak}", s.streak >= 10)
-        val next = checkNotNull(s.forecast?.next)
-        app.assertTagShows("next_milestone", "${F.kgShort(next.kg)} kg")
-        next.projected?.let { app.assertTagShows("next_milestone", F.date(it, s.now.toLocalDate())) }
-        // Food budget and the 2-week weight outlook, from the same core maths the screen uses.
+        // Food budget, from the same core maths the screen uses.
         val p = checkNotNull(s.profile)
         val budget = com.pandyabhavik.pulse.core.Budget.today(p, s.history, s.now.toLocalDate(), s.trendKg)
         app.assertTagShows("budget_left", F.n(kotlin.math.abs(budget.left)), substring = false)
+        app.scrollTo("balance_value")
+        shot("05b-today-calories-open")
+        app.assertNoneClipped(required = listOf("balance_value", "balance_label"))
+        // The weight tile opens Body: next milestone and the 2-week outlook.
+        app.openSection("section_body")
+        app.waitTag("next_milestone")
+        val next = checkNotNull(s.forecast?.next)
+        app.assertTagShows("next_milestone", "${F.kgShort(next.kg)} kg")
+        next.projected?.let { app.assertTagShows("next_milestone", F.date(it, s.now.toLocalDate())) }
         val outlook = com.pandyabhavik.pulse.core.TwoWeeks.outlook(p, s.history, s.now.toLocalDate())
         app.assertTagShows("two_week_kg", "${F.kg(outlook.toKg)} kg", substring = false)
         assertTrue("a month of data isn't an early estimate", !app.exists("two_week_early"))
@@ -106,27 +129,34 @@ class ScreensTest {
         assertTrue("no recap on Tuesday once dismissed", !app.exists("recap_card"))
         assertTrue("no celebration", !app.exists("celebration"))
         app.assertText("Evening, Bhavik", substring = true)
-        app.scrollTo("balance_ring")
-        shot("05b-today-calories-open")
-        app.assertNoneClipped(required = todayEssentials)
         app.expand("section_activity", "distance_value")
+        app.assertTagShows("steps_value", n(TestData.TODAY_STEPS))
+        shot("05e-today-activity-panel")
         app.expand("section_heart", "heart_rows")
+        app.assertTagShows("heart_resting", "${TestData.RESTING_HR}")
+        shot("05f-today-heart-panel")
         app.expand("section_sleep", "sleep_rows")
-        app.scrollTo("section_heart")
-        shot("05c-today-all-open")
+        app.assertTagShows("sleep_value", TestData.TODAY_SLEEP_SHORT)
+        shot("05c-today-sleep-panel")
+        app.closeSection()
     }
 
     @Test
     fun todayOver() {
         app.open(Scene.OVER)
-        app.waitTag("balance_value")
-        app.assertTagShows("balance_value", n(TestData.OVER_BY), substring = false)
-        app.assertTagShows("balance_label", "eaten more than burned", substring = false)
+        app.waitTag("verdict")
+        app.assertTagShows("dash_value_calories", n(TestData.OVER_BY), substring = false)
+        app.assertTagShows("dash_calories", "eaten more than burned")
+        // Over is never red or alarming: room to grow, with a kind next step.
+        assertTrue(app.textOf("dash_status_calories").let { it.contains("Steady") || it.contains("Room to grow") })
+        assertCalm()
         shot("06-today-over")
         app.expand("balance_ring", "streak_chip")
+        app.assertTagShows("balance_value", n(TestData.OVER_BY), substring = false)
+        app.assertTagShows("balance_label", "eaten more than burned", substring = false)
         app.assertText("more than you burned so far", substring = true)
-        app.assertNoneClipped(required = listOf("balance_value", "balance_label", "steps_value"))
-        if (app.scrollDownToShow("weight_trend_value")) shot("07-today-over-scrolled")
+        app.assertNoneClipped(required = listOf("balance_value", "balance_label"))
+        shot("07-today-over-panel")
     }
 
     @Test
@@ -180,11 +210,17 @@ class ScreensTest {
     @Test
     fun noFoodYet() {
         app.open(Scene.NO_FOOD)
-        app.waitTag("today_screen")
+        app.waitTag("verdict")
+        // Nothing logged is "filling in", grey, never a warning.
+        app.assertTagShows("dash_status_eaten", "Filling in", substring = false)
+        app.assertTagShows("dash_status_calories", "Filling in", substring = false)
+        assertCalm()
+        shot("13-today-no-food-yet")
+        app.openSection("balance_ring")
         app.waitText("No food logged yet")
         assertTrue("no balance number before any food", !app.exists("balance_value"))
-        shot("13-today-no-food-yet")
-        app.assertNoneClipped(required = listOf("balance_ring", "steps_value", "weight_value"))
+        app.assertNoneClipped(required = listOf("balance_ring"))
+        shot("13b-today-no-food-panel")
     }
 
     @Test
@@ -217,8 +253,8 @@ class ScreensTest {
     fun journey() {
         app.open(Scene.UNDER)
         app.tab("journey")
-        app.waitTag("journey_chart")
         app.waitTag("milestone_list")
+        assertTrue("the trajectory chart is gone (Bhavik)", !app.exists("journey_chart"))
         app.waitTag("journey_line")
         val s = checkNotNull(app.seeded)
         // The milestones: 115 First 5 kg next, then 114 (5% down), down to 85.
@@ -227,10 +263,9 @@ class ScreensTest {
         app.assertTagShows("whatif_row_0", "First 5 kg", substring = true)
         shot("18-journey")
         app.assertNoneClipped(required = listOf("whatif_result", "journey_line"))
-        // The trajectory: at the bottom on the cover screen, beside the goal on the inner one.
-        app.scrollTo("journey_chart")
-        shot("18b-journey-trajectory")
-        app.assertNotClipped("journey_chart")
+        // The timeline's line is one piece: every row's line column fills the row.
+        app.scrollTo("whatif_row_1")
+        shot("18b-journey-timeline")
 
         // What if: drag the slider to 1,000 kcal a day; the goal date follows.
         app.scrollTo("whatif_slider")
@@ -324,22 +359,31 @@ class ScreensTest {
         app.waitTag("today_screen")
         val s = checkNotNull(app.seeded)
         assertTrue("no days in the empty scene", s.history.all { it.steps == null && it.eaten == null && it.weightKg == null })
+        app.waitTag("verdict")
+        assertCalm()
+        shot("30-empty-today")
+        app.openSection("balance_ring")
         app.waitText("No food logged yet")
         assertTrue("no balance number before any food", !app.exists("balance_value"))
+        app.openSection("section_activity")
         app.assertTagShows("steps_value", "0")
+        app.openSection("section_heart")
         app.assertText("No heart data yet")
+        app.openSection("section_sleep")
         app.assertText("No sleep recorded last night")
-        shot("30-empty-today")
         app.expand("balance_ring", "streak_chip")
+        app.assertNoneClipped(required = listOf("balance_label", "streak_chip"))
         app.expand("section_body", "next_milestone")
-        app.assertNoneClipped(required = listOf("balance_label", "steps_value", "next_milestone", "streak_chip"))
+        app.assertNoneClipped(required = listOf("next_milestone"))
         // No data still gives a budget and an outlook, marked as early.
+        app.openSection("balance_ring")
         app.waitTag("food_budget")
+        app.openSection("section_body")
         app.waitTag("two_week_kg")
         app.waitTag("two_week_early")
         app.scrollTo("two_week_outlook")
         shot("30c-empty-weight-outlook")
-        if (!app.wide && app.scrollDownToShow("streak_chip")) shot("30b-empty-today-scrolled")
+        app.closeSection()
 
         app.tab("journey")
         app.waitTag("journey_screen")

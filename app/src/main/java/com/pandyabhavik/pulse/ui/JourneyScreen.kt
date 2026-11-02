@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -85,7 +86,6 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
-private val RANGES = listOf("1M" to 30, "3M" to 90, "1Y" to 365, "All" to null)
 
 @Composable
 fun JourneyScreen(s: HomeState) {
@@ -168,8 +168,6 @@ private fun JourneyCover(s: HomeState, ps: PaceState, showSettings: Boolean) {
         GoalHero(s, ps)
         PaceCard(s, ps)
         Timeline(s, ps)
-        // Bhavik: on the cover screen the trajectory sits at the bottom.
-        TrajectoryCard(s, ps, rangeDays = null, height = 200.dp)
     }
 }
 
@@ -178,7 +176,6 @@ private fun JourneyCover(s: HomeState, ps: PaceState, showSettings: Boolean) {
 @Composable
 private fun JourneyInner(s: HomeState, ps: PaceState) {
     val p = s.profile ?: return
-    var range by rememberSaveable { mutableIntStateOf(3) }
     Column(
         Modifier
             .fillMaxSize()
@@ -196,10 +193,8 @@ private fun JourneyInner(s: HomeState, ps: PaceState) {
                     .padding(bottom = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // Bhavik: the trajectory chart added nothing next to the timeline, so it's gone.
                 GoalHero(s, ps)
-                TrajectoryCard(s, ps, rangeDays = RANGES[range].second, height = 230.dp) {
-                    Segmented(RANGES.map { it.first }, range, tags = RANGES.map { "range_${it.first}" }) { range = it }
-                }
                 PaceCard(s, ps)
             }
             Column(
@@ -432,11 +427,12 @@ private fun TimelineRow(
     val now = row?.now
     val moved = at != null && now != null && at != now
     val sooner = at != null && now != null && at.isBefore(now)
-    Row(Modifier.fillMaxWidth().testTag(tag)) {
-        // The line and its dot.
+    Row(Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min).testTag(tag)) {
+        // The line and its dot: the column spans the whole row, so the segments join into one line.
         Box(
             Modifier
                 .width(22.dp)
+                .fillMaxHeight()
                 .drawBehind {
                     val x = size.width / 2
                     val mid = 21.dp.toPx()
@@ -522,332 +518,3 @@ private fun TimelineRow(
         }
     }
 }
-
-// ---- Trajectory --------------------------------------------------------------------------------
-
-@Composable
-private fun TrajectoryCard(s: HomeState, ps: PaceState, rangeDays: Int?, height: Dp, trailing: (@Composable RowScope.() -> Unit)? = null) {
-    val rows = rowsFor(s, ps)
-    val showWhatIf = ps.changed && ps.pace != null && rows.any { it.at != null }
-    PCard {
-        val legend: @Composable RowScope.() -> Unit = {
-            Legend(C.wt2, "Now")
-            if (showWhatIf) {
-                Spacer(Modifier.width(10.dp))
-                Legend(ps.color, "What if")
-            }
-        }
-        Lbl("Trajectory", Icons.AutoMirrored.Rounded.TrendingDown, C.wt, trailing = legend)
-        if (trailing != null) Row(Modifier.padding(top = 10.dp), content = trailing)
-        Spacer(Modifier.height(8.dp))
-        val whatIf = if (showWhatIf) rows.mapNotNull { r -> r.at?.let { it to r.m.kg } } else emptyList()
-        WeightChart(s, rangeDays = rangeDays, compact = false, height = height, whatIf = whatIf, whatIfColor = ps.color)
-    }
-}
-
-@Composable
-private fun Legend(color: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(14.dp).height(3.dp).clip(CircleShape).background(color))
-        Spacer(Modifier.width(5.dp))
-        Text(label, style = T.small.copy(fontSize = 11.sp), maxLines = 1)
-    }
-}
-
-// ---- The chart ---------------------------------------------------------------------------------
-
-/**
- * Weigh-ins as dots, the trend as a glowing gradient line with a soft area under it, the projection as
- * a dashed line through each milestone's projected date to the goal, with milestone markers.
- * Everything drawn comes from HomeState (trend + forecast); nothing is computed here.
- */
-@Composable
-private fun WeightChart(
-    s: HomeState,
-    rangeDays: Int?,
-    compact: Boolean,
-    height: Dp,
-    whatIf: List<Pair<LocalDate, Double>> = emptyList(),
-    whatIfColor: Color = C.under,
-) {
-    val context = LocalContext.current
-    val today = s.now.toLocalDate()
-    val trend = s.trend
-    val f = s.forecast
-    val p = s.profile
-    if (trend.isEmpty() || p == null) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(height)
-                .clip(androidx.compose.foundation.shape.RoundedCornerShape(22.dp))
-                .background(C.s1)
-                .border(1.dp, C.line, androidx.compose.foundation.shape.RoundedCornerShape(22.dp))
-                .testTag("journey_chart"),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(20.dp)) {
-                androidx.compose.material3.Icon(Icons.Rounded.Insights, null, tint = C.wt, modifier = Modifier.size(28.dp))
-                Spacer(Modifier.height(8.dp))
-                Text("Your trend line starts with your first weigh-in.", style = T.body, textAlign = TextAlign.Center)
-            }
-        }
-        return
-    }
-
-    val reveal = remember { Animatable(0f) }
-    LaunchedEffect(rangeDays, trend.size) {
-        reveal.snapTo(0f)
-        reveal.animateTo(1f, tween(1100, easing = FastOutSlowInEasing))
-    }
-    val typeface = remember { runCatching { ResourcesCompat.getFont(context, R.font.figtree) }.getOrNull() ?: Typeface.DEFAULT }
-    val textPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG) }
-    val glowPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND } }
-    val dashPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND } }
-
-    // Projection polyline: today -> each unreached milestone's projected date (in order) -> goal.
-    val stalledNow = f == null || f.source == RateSource.STALLED
-    val trendNow = s.trendKg
-    val projPts: List<Pair<LocalDate, Double>> = buildList<Pair<LocalDate, Double>> {
-        if (!stalledNow && trendNow != null) {
-            add(today to trendNow)
-            f?.milestones?.filter { it.reachedOn == null && it.projected != null }?.sortedBy { it.projected?.toEpochDay() }?.forEach { add(it.projected!! to it.kg) }
-        }
-    }
-    // The what-if line: today -> each milestone at the chosen pace.
-    val wiPts: List<Pair<LocalDate, Double>> =
-        if (whatIf.isEmpty() || trendNow == null) emptyList() else listOf(today to trendNow) + whatIf.sortedBy { it.first.toEpochDay() }
-    val firstDate = trend.first().date
-    val goalDate = listOfNotNull(projPts.lastOrNull()?.first, wiPts.lastOrNull()?.first).maxOrNull()
-    val start = if (rangeDays == null) firstDate else later(firstDate, today.minusDays(rangeDays.toLong()))
-    val end = when {
-        rangeDays == null -> goalDate ?: today.plusDays(30)
-        goalDate == null -> today.plusDays((rangeDays / 3).toLong().coerceAtLeast(7))
-        else -> earlier(goalDate, today.plusDays(rangeDays.toLong()))
-    }.let { if (!it.isAfter(start)) start.plusDays(7) else it }
-    val total = ChronoUnit.DAYS.between(start, end).toFloat().coerceAtLeast(1f)
-
-    val visible = trend.filter { !it.date.isBefore(start) }
-    val milestones = f?.milestones.orEmpty().filter { it.reachedOn == null && it.projected != null && !it.projected!!.isAfter(end) }
-    val nextM = f?.next
-    val values = buildList<Double> {
-        visible.forEach { tp ->
-            add(tp.trend)
-            tp.raw?.let { r -> add(r) }
-        }
-        projPts.filter { !it.first.isAfter(end) }.forEach { add(it.second) }
-        // The projection's value where it leaves the window, by interpolating between the two points around [end].
-        val after = projPts.indexOfFirst { it.first.isAfter(end) }
-        if (after > 0) add(interp(projPts[after - 1], projPts[after], end))
-        wiPts.filter { !it.first.isAfter(end) }.forEach { add(it.second) }
-        val wiAfter = wiPts.indexOfFirst { it.first.isAfter(end) }
-        if (wiAfter > 0) add(interp(wiPts[wiAfter - 1], wiPts[wiAfter], end))
-        if (compact && nextM != null) add(nextM.kg)
-    }
-    val rawLo = values.minOrNull() ?: p.goalKg
-    val rawHi = values.maxOrNull() ?: p.startKg
-    val pad = maxOf(0.6, (rawHi - rawLo) * 0.08)
-    val lo = rawLo - pad
-    val hi = rawHi + pad
-
-    Canvas(
-        Modifier
-            .fillMaxWidth()
-            .height(height)
-            .testTag("journey_chart"),
-    ) {
-        val left = if (compact) 4.dp.toPx() else 34.dp.toPx()
-        val right = if (compact) 4.dp.toPx() else 50.dp.toPx()
-        val top = 10.dp.toPx()
-        val bottom = if (compact) 6.dp.toPx() else 24.dp.toPx()
-        val w = size.width - left - right
-        val h = size.height - top - bottom
-        fun x(d: LocalDate) = left + ChronoUnit.DAYS.between(start, d) / total * w
-        fun y(v: Double) = top + ((hi - v) / (hi - lo)).toFloat() * h
-
-        textPaint.typeface = typeface
-        textPaint.textSize = 11.sp.toPx()
-
-        // Grid + labels.
-        if (!compact) {
-            val step = niceStep(hi - lo)
-            var g = ceil(lo / step) * step
-            while (g <= hi) {
-                val gy = y(g)
-                drawLine(C.s3, Offset(left, gy), Offset(size.width - right, gy), strokeWidth = 1.dp.toPx())
-                drawIntoCanvas { c ->
-                    textPaint.color = C.dim.toArgb()
-                    textPaint.textAlign = Paint.Align.RIGHT
-                    c.nativeCanvas.drawText(F.kgShort(g), left - 6.dp.toPx(), gy + 4.dp.toPx(), textPaint)
-                }
-                g += step
-            }
-            // Month labels.
-            var mDate = start.withDayOfMonth(1).plusMonths(1)
-            val months = ChronoUnit.MONTHS.between(start, end).coerceAtLeast(1)
-            val every = when {
-                months > 18 -> 4L
-                months > 8 -> 2L
-                else -> 1L
-            }
-            var k = 0L
-            while (!mDate.isAfter(end)) {
-                if (k % every == 0L) {
-                    drawIntoCanvas { c ->
-                        textPaint.color = C.dim.toArgb()
-                        textPaint.textAlign = Paint.Align.CENTER
-                        c.nativeCanvas.drawText(F.monthShort.format(mDate), x(mDate), size.height - 6.dp.toPx(), textPaint)
-                    }
-                }
-                mDate = mDate.plusMonths(1)
-                k++
-            }
-        } else if (nextM != null) {
-            val ny = y(nextM.kg)
-            drawLine(Color(0xFF2A2F3D), Offset(0f, ny), Offset(size.width, ny), strokeWidth = 1.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6f, 8f)))
-            drawIntoCanvas { c ->
-                textPaint.color = C.mute.toArgb()
-                textPaint.textAlign = Paint.Align.RIGHT
-                c.nativeCanvas.drawText(F.kgShort(nextM.kg), size.width - 2.dp.toPx(), ny - 5.dp.toPx(), textPaint)
-            }
-        }
-
-        clipRect(right = left + (w + right) * reveal.value) {
-            // Uncertainty band and dashed projection.
-            if (projPts.size >= 2) {
-                val band = Path()
-                val span = ChronoUnit.DAYS.between(today, projPts.last().first).toFloat().coerceAtLeast(1f)
-                val upper = projPts.map { (d, v) -> Offset(x(d), y(v + 0.4 + 3.2 * (ChronoUnit.DAYS.between(today, d) / span))) }
-                val lower = projPts.map { (d, v) -> Offset(x(d), y(v - 0.4 - 3.2 * (ChronoUnit.DAYS.between(today, d) / span))) }
-                band.moveTo(upper.first().x, upper.first().y)
-                upper.drop(1).forEach { band.lineTo(it.x, it.y) }
-                lower.reversed().forEach { band.lineTo(it.x, it.y) }
-                band.close()
-                drawPath(band, C.wt2.copy(alpha = 0.08f))
-
-                drawIntoCanvas { c ->
-                    val path = android.graphics.Path()
-                    projPts.forEachIndexed { i, (d, v) -> if (i == 0) path.moveTo(x(d), y(v)) else path.lineTo(x(d), y(v)) }
-                    dashPaint.color = C.wt2.copy(alpha = 0.9f).toArgb()
-                    dashPaint.strokeWidth = 2.5.dp.toPx()
-                    dashPaint.pathEffect = DashPathEffect(floatArrayOf(5.dp.toPx(), 6.dp.toPx()), 0f)
-                    c.nativeCanvas.drawPath(path, dashPaint)
-                }
-            }
-
-            // The what-if line, solid and glowing, with a dot at each milestone.
-            if (wiPts.size >= 2) {
-                drawIntoCanvas { c ->
-                    val path = android.graphics.Path()
-                    wiPts.forEachIndexed { i, (d, v) -> if (i == 0) path.moveTo(x(d), y(v)) else path.lineTo(x(d), y(v)) }
-                    glowPaint.shader = null
-                    glowPaint.color = whatIfColor.toArgb()
-                    glowPaint.strokeWidth = 6.dp.toPx()
-                    glowPaint.alpha = 150
-                    glowPaint.maskFilter = BlurMaskFilter(5.dp.toPx(), BlurMaskFilter.Blur.NORMAL)
-                    c.nativeCanvas.drawPath(path, glowPaint)
-                    glowPaint.maskFilter = null
-                    glowPaint.alpha = 255
-                    glowPaint.strokeWidth = 3.dp.toPx()
-                    c.nativeCanvas.drawPath(path, glowPaint)
-                }
-                wiPts.drop(1).forEach { (d, v) -> drawCircle(whatIfColor, 3.5.dp.toPx(), Offset(x(d), y(v))) }
-            }
-
-            // Area under the trend.
-            if (visible.size >= 2) {
-                val area = Path()
-                area.moveTo(x(visible.first().date), y(visible.first().trend))
-                visible.drop(1).forEach { area.lineTo(x(it.date), y(it.trend)) }
-                area.lineTo(x(visible.last().date), top + h)
-                area.lineTo(x(visible.first().date), top + h)
-                area.close()
-                drawPath(area, Brush.verticalGradient(listOf(C.wt.copy(alpha = 0.22f), Color.Transparent), startY = top, endY = top + h))
-            }
-
-            // Weigh-in dots.
-            visible.forEach { tp -> tp.raw?.let { drawCircle(Color(0xFF6A7086), 2.2.dp.toPx(), Offset(x(tp.date), y(it))) } }
-
-            // The glowing trend line.
-            if (visible.isNotEmpty()) {
-                val line = Path()
-                line.moveTo(x(visible.first().date), y(visible.first().trend))
-                visible.drop(1).forEach { line.lineTo(x(it.date), y(it.trend)) }
-                val x0 = x(visible.first().date)
-                val x1 = maxOf(x(visible.last().date), x0 + 1f)
-                drawIntoCanvas { c ->
-                    val ap = android.graphics.Path()
-                    ap.moveTo(x(visible.first().date), y(visible.first().trend))
-                    visible.drop(1).forEach { ap.lineTo(x(it.date), y(it.trend)) }
-                    glowPaint.shader = LinearGradient(x0, 0f, x1, 0f, C.wt.toArgb(), C.wt2.toArgb(), Shader.TileMode.CLAMP)
-                    glowPaint.strokeWidth = 7.dp.toPx()
-                    glowPaint.alpha = 190
-                    glowPaint.maskFilter = BlurMaskFilter(5.dp.toPx(), BlurMaskFilter.Blur.NORMAL)
-                    c.nativeCanvas.drawPath(ap, glowPaint)
-                }
-                drawPath(
-                    line,
-                    Brush.horizontalGradient(listOf(C.wt, C.wt2), startX = x0, endX = x1),
-                    style = Stroke(width = 3.5.dp.toPx(), cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round),
-                )
-            }
-
-            // Milestone markers on the projection.
-            if (!compact) {
-                milestones.forEach { m ->
-                    val cx = x(m.projected!!)
-                    val cy = y(m.kg)
-                    val isGoal = m.isGoal
-                    val r = (if (isGoal) 7 else 5).dp.toPx()
-                    drawCircle(C.bg, r, Offset(cx, cy))
-                    drawCircle(if (m == nextM) C.wt else C.wt2, r, Offset(cx, cy), style = Stroke(2.5.dp.toPx()))
-                    // Only the goal is labelled: the timeline beside/above has every name and date.
-                    if (isGoal) drawIntoCanvas { c ->
-                        textPaint.color = (if (isGoal) Color.White else Color(0xFFBFC4D3)).toArgb()
-                        textPaint.textAlign = Paint.Align.LEFT
-                        textPaint.isFakeBoldText = true
-                        textPaint.textSize = (if (isGoal) 13 else 11).sp.toPx()
-                        c.nativeCanvas.drawText("${F.kgShort(m.kg)} kg", cx + 8.dp.toPx(), cy - 8.dp.toPx(), textPaint)
-                        textPaint.isFakeBoldText = false
-                        textPaint.textSize = 11.sp.toPx()
-                    }
-                }
-            }
-        }
-
-        // Today.
-        s.trendKg?.let { tk ->
-            val tx = x(today).coerceIn(left, size.width - right)
-            val ty = y(tk)
-            drawCircle(C.wt.copy(alpha = 0.35f), 10.dp.toPx(), Offset(tx, ty))
-            drawCircle(Color.White, (if (compact) 5 else 6).dp.toPx(), Offset(tx, ty))
-            if (!compact) {
-                drawIntoCanvas { c ->
-                    textPaint.color = Color.White.toArgb()
-                    textPaint.textAlign = Paint.Align.LEFT
-                    textPaint.isFakeBoldText = true
-                    c.nativeCanvas.drawText("Today ${F.kg(tk)}", tx + 12.dp.toPx(), ty + 22.dp.toPx(), textPaint)
-                    textPaint.isFakeBoldText = false
-                }
-            }
-        }
-    }
-}
-
-private fun interp(a: Pair<LocalDate, Double>, b: Pair<LocalDate, Double>, at: LocalDate): Double {
-    val span = ChronoUnit.DAYS.between(a.first, b.first).toDouble()
-    if (span <= 0) return b.second
-    val t = ChronoUnit.DAYS.between(a.first, at) / span
-    return a.second + (b.second - a.second) * t
-}
-
-private fun niceStep(range: Double): Double = when {
-    range > 30 -> 10.0
-    range > 12 -> 5.0
-    range > 5 -> 2.0
-    range > 2 -> 1.0
-    else -> 0.5
-}
-
-private fun later(a: LocalDate, b: LocalDate): LocalDate = if (a.isAfter(b)) a else b
-private fun earlier(a: LocalDate, b: LocalDate): LocalDate = if (a.isBefore(b)) a else b

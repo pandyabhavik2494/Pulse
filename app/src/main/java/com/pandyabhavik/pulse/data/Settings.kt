@@ -46,7 +46,10 @@ data class Settings(
     val backfill: String? = null,
 ) {
     companion object {
-        val DEFAULT_DASHBOARD = listOf("calories", "left_to_eat", "steps", "weight", "in_2_weeks", "resting_hr", "sleep", "burned")
+        val DEFAULT_DASHBOARD = listOf(
+            "burned", "eaten", "calories", "left_to_eat", "steps", "distance",
+            "weight", "weight_trend", "resting_only", "resting_hr", "sleep", "deep_sleep",
+        )
     }
 
     /** Milestone weights are computed, so compare with a tolerance rather than exact Double equality. */

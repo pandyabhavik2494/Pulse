@@ -1,5 +1,8 @@
 package com.pandyabhavik.pulse.ui
 
+import androidx.compose.ui.semantics.selected
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
@@ -115,6 +118,7 @@ fun TodayScreen(s: HomeState) {
 
 @Composable
 private fun TodayCover(s: HomeState, openSheet: () -> Unit) {
+    var open by rememberSaveable { mutableStateOf<String?>(null) }
     Column(
         Modifier
             .fillMaxSize()
@@ -126,12 +130,66 @@ private fun TodayCover(s: HomeState, openSheet: () -> Unit) {
         TodayHeader(s, showSettings = true)
         s.recap?.let { RecapCard(it, s.recapCommitted) }
         HealthWarning(s)
-        Dashboard(s)
-        CaloriesSection(s, openSheet)
-        ActivitySection(s)
-        BodySection(s)
-        HeartSection(s)
-        SleepSection(s)
+        // Bhavik: the dashboard is the page; a tile opens its section in a panel.
+        Dashboard(s, onOpen = { open = it })
+    }
+    open?.let { key -> SectionSheet(s, key, openSheet) { open = null } }
+}
+
+/** A section opened from a tile on the cover screen: slides up, already expanded. */
+@Composable
+private fun SectionSheet(s: HomeState, key: String, openSheet: () -> Unit, onDismiss: () -> Unit) {
+    PulseSheet("section_sheet", onDismiss) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                IconBtn(Icons.Rounded.Close, "Close", Modifier.testTag("section_close")) { onDismiss() }
+            }
+            CompositionLocalProvider(LocalPinned provides true) { SectionFor(key, s, openSheet) }
+        }
+    }
+}
+
+/** The section behind a tile: "calories", "activity", "body", "heart" or "sleep". */
+@Composable
+private fun SectionFor(key: String, s: HomeState, openSheet: () -> Unit) {
+    when (key) {
+        "calories" -> CaloriesSection(s, openSheet)
+        "activity" -> ActivitySection(s)
+        "body" -> BodySection(s)
+        "heart" -> HeartSection(s)
+        else -> SleepSection(s)
+    }
+}
+
+private val SECTION_TABS = listOf(
+    Triple("calories", "Calories", Icons.Rounded.LocalFireDepartment),
+    Triple("activity", "Activity", Icons.AutoMirrored.Rounded.DirectionsWalk),
+    Triple("body", "Body", Icons.Rounded.MonitorWeight),
+    Triple("heart", "Heart", Icons.Rounded.Favorite),
+    Triple("sleep", "Sleep", Icons.Rounded.Bedtime),
+)
+
+/** Inner screen: pick the section shown on the right (tiles pick it too). */
+@Composable
+private fun SectionTabs(selected: String, onPick: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SECTION_TABS.forEach { (key, label, icon) ->
+            val on = key == selected
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (on) C.s3 else C.s1)
+                    .border(1.dp, if (on) C.soft.copy(alpha = 0.5f) else C.line, RoundedCornerShape(16.dp))
+                    .clickable(onClickLabel = "Show $label") { onPick(key) }
+                    .semantics { this.selected = on }
+                    .testTag("section_tab_$key"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, label, tint = if (on) C.ink else C.mute, modifier = Modifier.size(20.dp))
+            }
+        }
     }
 }
 
@@ -139,6 +197,7 @@ private fun TodayCover(s: HomeState, openSheet: () -> Unit) {
 
 @Composable
 private fun TodayInner(s: HomeState, openSheet: () -> Unit) {
+    var selected by rememberSaveable { mutableStateOf("calories") }
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         TodayHeader(s, showSettings = false)
         Spacer(Modifier.height(8.dp))
@@ -153,7 +212,7 @@ private fun TodayInner(s: HomeState, openSheet: () -> Unit) {
                 // Bhavik: on the inner screen the overview sits on the left, the sections on the right.
                 HealthWarning(s)
                 s.recap?.let { RecapCard(it, s.recapCommitted) }
-                Dashboard(s)
+                Dashboard(s, onOpen = { selected = it }, selected = selected)
             }
             Column(
                 Modifier
@@ -162,11 +221,9 @@ private fun TodayInner(s: HomeState, openSheet: () -> Unit) {
                     .padding(bottom = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                CaloriesSection(s, openSheet)
-                ActivitySection(s)
-                BodySection(s)
-                HeartSection(s)
-                SleepSection(s)
+                // The section for the tile tapped on the left, already expanded.
+                SectionTabs(selected) { selected = it }
+                CompositionLocalProvider(LocalPinned provides true) { SectionFor(selected, s, openSheet) }
             }
         }
     }
@@ -252,7 +309,7 @@ fun SyncChip(s: HomeState) {
 private fun BalanceCard(s: HomeState, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val balance = s.balance
     val over = s.isOver
-    val color = if (over) C.over else C.under
+    val color = if (over) C.grow else C.under
     val shown by animateIntAsState(abs(balance ?: 0), tween(700), label = "balance")
     PCard(
         modifier.testTag("balance_ring"),
@@ -412,14 +469,16 @@ private fun Section(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // Collapsed by default: just the big number. A tap opens the details (and closes them again).
-    var open by rememberSaveable(tag) { mutableStateOf(false) }
+    val pinned = LocalPinned.current
+    var openState by rememberSaveable(tag) { mutableStateOf(false) }
+    val open = pinned || openState
     val turn by animateFloatAsState(if (open) 180f else 0f, tween(250), label = "chevron-$tag")
     PCard(
         modifier
             .testTag(tag)
             .animateContentSize()
             .semantics { stateDescription = if (open) "Expanded" else "Collapsed" },
-        onClick = { open = !open },
+        onClick = if (pinned) null else ({ openState = !openState }),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -429,13 +488,15 @@ private fun Section(
             Spacer(Modifier.width(10.dp))
             Text(title, style = T.h3.copy(fontSize = 17.sp), maxLines = 1, modifier = Modifier.weight(1f))
             if (trailing != null) trailing()
-            Spacer(Modifier.width(6.dp))
-            Icon(
-                Icons.Rounded.ExpandMore,
-                if (open) "Hide details" else "Show details",
-                tint = C.mute,
-                modifier = Modifier.size(24.dp).rotate(turn),
-            )
+            if (!pinned) {
+                Spacer(Modifier.width(6.dp))
+                Icon(
+                    Icons.Rounded.ExpandMore,
+                    if (open) "Hide details" else "Show details",
+                    tint = C.mute,
+                    modifier = Modifier.size(24.dp).rotate(turn),
+                )
+            }
         }
         CompositionLocalProvider(LocalOpen provides open) { content() }
     }
@@ -443,6 +504,9 @@ private fun Section(
 
 /** Whether the section around it is expanded. */
 private val LocalOpen = compositionLocalOf { false }
+
+/** True inside the section panel / inner right column: sections there are always open, with no chevron. */
+private val LocalPinned = compositionLocalOf { false }
 
 /** The part of a section that shows only once it's tapped open. */
 @Composable
@@ -532,7 +596,7 @@ private fun TripleStat(vararg items: Triple<String, String, Color>) {
 @Composable
 private fun CaloriesSection(s: HomeState, onClick: () -> Unit) {
     val balance = s.balance
-    val color = if (s.isOver) C.over else C.under
+    val color = if (s.isOver) C.grow else C.under
     val shown by animateIntAsState(abs(balance ?: 0), tween(700), label = "balance")
     val d = s.today
     Section("Calories", Icons.Rounded.LocalFireDepartment, C.under, "balance_ring") {
@@ -542,7 +606,7 @@ private fun CaloriesSection(s: HomeState, onClick: () -> Unit) {
             // Eaten as a share of burned: the empty part is the deficit; full and red means over.
             val burned = s.burned ?: 0
             val frac = if (burned > 0) (s.eaten ?: 0).toFloat() / burned else 0f
-            GlowBar(frac, listOf(if (s.isOver) C.over else C.food), height = 8.dp, glow = false)
+            GlowBar(frac, listOf(if (s.isOver) C.grow else C.food), height = 8.dp, glow = false)
             if (s.isOver) Text(
                 "You've eaten ${F.n(-balance)} kcal more than you burned so far",
                 style = T.small,
@@ -590,7 +654,7 @@ private fun CaloriesSection(s: HomeState, onClick: () -> Unit) {
             valueColor = when {
                 avg == null -> C.mute
                 avg >= 0 -> C.under
-                else -> C.over
+                else -> C.grow
             },
         )
         FieldRow(
@@ -727,7 +791,7 @@ private fun TwoWeekBlock(s: HomeState) {
     val today = s.now.toLocalDate()
     val o = TwoWeeks.outlook(p, s.history, today)
     val gain = o.changeKg > 0.05
-    val color = if (gain) C.over else C.under
+    val color = if (gain) C.grow else C.under
     Column(
         Modifier
             .fillMaxWidth()
@@ -793,7 +857,7 @@ private fun TwoWeekBlock(s: HomeState) {
                 else -> "steady"
             },
             if (i == 0) Modifier.testTag("two_week_last") else Modifier,
-            valueColor = if (per.changeKg >= 0.05) C.over else C.under,
+            valueColor = if (per.changeKg >= 0.05) C.grow else C.under,
         )
     }
 }
@@ -819,7 +883,7 @@ private fun BudgetBlock(s: HomeState) {
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = 4.dp)) {
             Text(
                 F.n(abs(b.left)),
-                style = T.metric.copy(fontSize = 26.sp, lineHeight = 30.sp, letterSpacing = 0.sp, color = if (past) C.over else C.under),
+                style = T.metric.copy(fontSize = 26.sp, lineHeight = 30.sp, letterSpacing = 0.sp, color = if (past) C.grow else C.under),
                 maxLines = 1,
                 softWrap = false,
                 modifier = Modifier.testTag("budget_left"),
@@ -827,7 +891,7 @@ private fun BudgetBlock(s: HomeState) {
             Spacer(Modifier.width(8.dp))
             Text(
                 if (past) "kcal past today's budget" else "kcal to stay on pace",
-                style = T.body.copy(fontSize = 15.sp, color = if (past) C.over else C.soft),
+                style = T.body.copy(fontSize = 15.sp, color = if (past) C.grow else C.soft),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(bottom = 3.dp),
@@ -857,7 +921,7 @@ private fun HeartSection(s: HomeState) {
         }
         // The big number: the newest reading Fitbit has synced today, else resting, else the day's average.
         when {
-            d.hrLatest != null -> BigValue("${d.hrLatest}", "bpm at ${d.hrLatestAt ?: "—"}", C.over, "heart_latest")
+            d.hrLatest != null -> BigValue("${d.hrLatest}", "bpm at ${d.hrLatestAt ?: "—"}", C.ink, "heart_latest")
             resting != null -> BigValue("${resting.restingHr}", "bpm resting", C.ink, "heart_resting")
             d.hrAvg != null -> BigValue("${d.hrAvg}", "bpm average", C.ink, "heart_resting")
             else -> EmptyLine("No heart rate today yet", "It appears when your Fitbit syncs to Health Connect.")

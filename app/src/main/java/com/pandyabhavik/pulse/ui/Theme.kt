@@ -41,6 +41,10 @@ object C {
     val sheet = Color(0xFF10131A)
     val restingBar = Color(0xFF3A4256)
 
+    /** Calm status colours (Bhavik: encouraging, never scary). On track uses [under]. */
+    val steady = Color(0xFF8FB8FF)
+    val grow = Color(0xFFFFA3C7)
+
     val weightBrush: Brush get() = Brush.horizontalGradient(listOf(wt, wt2))
     val goBrush: Brush get() = Brush.horizontalGradient(listOf(under, steps))
     val heroBrush: Brush get() = Brush.horizontalGradient(listOf(under, steps, wt, wt2))

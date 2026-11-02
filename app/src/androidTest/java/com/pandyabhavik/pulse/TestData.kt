@@ -609,10 +609,38 @@ class AppDriver(val compose: ComposeTestRule) {
     // ---- Navigation --------------------------------------------------------------------------------
 
     /** "today", "journey", "history" or "settings": the bottom bar / rail item (settings: the top-right icon on the cover screen). */
-    /** Taps a Today section open (they start collapsed) unless [detail], a tag inside it, already shows. */
+    /** The dashboard tile that opens each Today section (its tag -> the tile's tag). */
+    private val sectionTile = mapOf(
+        "balance_ring" to "dash_calories",
+        "section_activity" to "dash_steps",
+        "section_body" to "dash_weight",
+        "section_heart" to "dash_resting_hr",
+        "section_sleep" to "dash_sleep",
+    )
+
+    /**
+     * Opens a Today section from its dashboard tile: a panel on the cover screen, the right column on the
+     * inner one. Sections there are always expanded. Closes another open panel first.
+     */
+    fun openSection(section: String) {
+        if (exists(section)) return
+        closeSection()
+        click(checkNotNull(sectionTile[section]) { "no tile opens $section" })
+        waitTag(section)
+    }
+
+    /** Closes the section panel (cover screen) if one is open. */
+    fun closeSection() {
+        if (exists("section_close")) {
+            click("section_close")
+            waitGone("section_sheet")
+        }
+    }
+
+    /** Opens [section] unless [detail], a tag inside it, already shows. */
     fun expand(section: String, detail: String) {
         if (exists(detail)) return
-        click(section)
+        openSection(section)
         waitTag(detail)
     }
 
