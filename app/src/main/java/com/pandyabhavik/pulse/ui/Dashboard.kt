@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.heightIn as hIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -288,9 +287,9 @@ private fun Verdict(s: HomeState, shown: List<Status>) {
         background = androidx.compose.ui.graphics.Brush.linearGradient(listOf(headColor.copy(alpha = 0.10f), Color.Transparent)),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            GlowDot(headColor.copy(alpha = 0.6f), 22.dp)
-            Box(Modifier.offset(x = (-16).dp).size(10.dp).clip(CircleShape).background(headColor))
-            Text(head, style = T.h3.copy(fontSize = 20.sp, color = headColor), maxLines = 1, modifier = Modifier.offset(x = (-8).dp).testTag("verdict_headline"))
+            Box(Modifier.size(10.dp).clip(CircleShape).background(headColor))
+            Spacer(Modifier.width(10.dp))
+            Text(head, style = T.h3.copy(fontSize = 20.sp, color = headColor), maxLines = 1, modifier = Modifier.testTag("verdict_headline"))
         }
         Text(line, style = T.body.copy(fontSize = 14.sp, lineHeight = 20.sp), modifier = Modifier.padding(top = 8.dp).testTag("verdict_line"))
         androidx.compose.foundation.layout.FlowRow(
