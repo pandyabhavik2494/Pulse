@@ -325,6 +325,7 @@ private fun Verdict(s: HomeState, shown: List<Status>) {
  * to a row. Each tile has a calm status; tapping one opens its section ([onOpen] gets the section key).
  */
 @Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 fun Dashboard(s: HomeState, onOpen: (String) -> Unit = {}, selected: String? = null) {
     val ui = LocalUi.current
     val settings by ui.vm.repo.settings.collectAsStateWithLifecycle()
