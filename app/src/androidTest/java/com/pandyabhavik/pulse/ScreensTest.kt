@@ -162,7 +162,7 @@ class ScreensTest {
     @Test
     fun breakdown() {
         app.open(Scene.UNDER)
-        app.waitTag("balance_ring")
+        app.waitTag("dashboard")
         app.expand("balance_ring", "meal_breakdown")
         app.click("meal_breakdown")
         app.waitTag("breakdown_sheet")
