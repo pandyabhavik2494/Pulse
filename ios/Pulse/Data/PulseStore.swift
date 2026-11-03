@@ -26,6 +26,8 @@ final class PulseStore {
     private(set) var lastSync: Date?
     private(set) var syncing = false
     private(set) var healthAsked = false
+    /// Steps so far today from the phone's own motion sensor (live while the app is open).
+    private(set) var liveSteps: Int?
 
     private let container: ModelContainer
     private let defaults = Snapshot.defaults
@@ -117,6 +119,18 @@ final class PulseStore {
         return await HealthReader.shared.body()
     }
 
+    /// Live steps from the motion sensor; call when the app comes to the foreground.
+    func startLiveSteps() {
+        guard !demo else { return }
+        LiveSteps.shared.start { [weak self] n in
+            guard let self else { return }
+            self.liveSteps = n
+            self.rebuild()
+        }
+    }
+
+    func stopLiveSteps() { LiveSteps.shared.stop() }
+
     // MARK: - Storage
 
     private func loadDays() -> [DayLog] {
@@ -140,16 +154,18 @@ final class PulseStore {
     /// Rebuilds the state for "now" (also called each minute by the Today screen so time-of-day moods move).
     func rebuild() {
         guard let p = profile else { state = nil; return }
-        let s = HomeState.build(profile: p, days: days, now: Date(), lastSync: lastSync)
+        let s = HomeState.build(profile: p, days: days.withLiveSteps(liveSteps), now: Date(), lastSync: lastSync)
         state = s
         guard !demo || ProcessInfo.processInfo.arguments.contains("-demoWidgets") else { return }
         let snap = Snapshot(s)
         var old = Snapshot.load()
         old?.updated = snap.updated
+        // Live steps tick every few seconds; refresh widgets and the watch only every 250 steps.
+        if let o = old, abs(o.steps - snap.steps) < 250 { old?.steps = snap.steps }
         if snap != old {
             snap.save()
             WidgetCenter.shared.reloadAllTimelines()
+            WatchLink.shared.send(profile: p, snapshot: snap)
         }
-        WatchLink.shared.send(profile: p, snapshot: snap)
     }
 }

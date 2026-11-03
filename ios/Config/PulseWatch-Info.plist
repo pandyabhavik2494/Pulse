@@ -24,6 +24,8 @@
 	<string>Pulse reads your burned energy, steps and food from Apple Health to show today's balance on your wrist.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Pulse never writes to Apple Health. Debug builds can add sample data in the Simulator for screenshots.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Pulse counts your steps live on your wrist while it's open.</string>
 	<key>WKApplication</key>
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>

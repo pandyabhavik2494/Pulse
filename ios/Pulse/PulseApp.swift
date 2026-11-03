@@ -45,12 +45,13 @@ struct RootView: View {
         .background(C.bg.ignoresSafeArea())
         .task { await launch() }
         .onChange(of: phase) { _, p in
-            if p == .active { Task { await store.sync() } }
+            if p == .active { store.startLiveSteps(); Task { await store.sync() } } else if p == .background { store.stopLiveSteps() }
         }
         .task {
             // Time-of-day moods ("on pace for now") move as the day goes.
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
+                if LiveSteps.shared.stale { store.startLiveSteps() }
                 store.rebuild()
             }
         }
@@ -71,6 +72,7 @@ struct RootView: View {
         }
         #endif
         store.startObserving()
+        store.startLiveSteps()
         await store.sync()
     }
 }

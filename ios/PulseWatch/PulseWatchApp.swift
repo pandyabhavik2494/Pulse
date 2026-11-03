@@ -23,6 +23,7 @@ final class WatchStore {
     private(set) var phone: Snapshot?
     private var profile: Profile?
     private var days: [DayLog] = []
+    private var liveSteps: Int?
     private let demo = ProcessInfo.processInfo.arguments.contains("-demo") || UserDefaults.standard.bool(forKey: "PulseDemoData")
 
     init() {
@@ -54,6 +55,7 @@ final class WatchStore {
         try? await HealthReader.shared.requestAuthorization()
         if profile == nil { await guessProfile() }
         HealthReader.shared.observe { [weak self] in await self?.refresh() }
+        LiveSteps.shared.start { [weak self] n in self?.liveSteps = n; self?.rebuild() }
         await refresh()
     }
 
@@ -78,7 +80,7 @@ final class WatchStore {
 
     private func rebuild() {
         guard let p = profile else { state = nil; return }
-        var merged = days
+        var merged = days.withLiveSteps(liveSteps)
         let today = LocalDate.today()
         // Food is logged on the phone; if the watch hasn't got it yet, use the phone's numbers for today.
         if let phone, phone.day == today {
@@ -95,6 +97,8 @@ final class WatchStore {
         let snap = Snapshot(s)
         var old = Snapshot.load()
         old?.updated = snap.updated
+        // Live steps tick every few seconds; refresh widgets and the watch only every 250 steps.
+        if let o = old, abs(o.steps - snap.steps) < 250 { old?.steps = snap.steps }
         if snap != old {
             snap.save()
             WidgetCenter.shared.reloadAllTimelines()

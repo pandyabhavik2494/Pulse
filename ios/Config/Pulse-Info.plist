@@ -35,6 +35,8 @@
 	<string>Pulse reads your burned energy, steps, food from MyFitnessPal, weigh-ins from VeSync, heart and sleep from Apple Health to show your day and your journey.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Pulse never writes to Apple Health. Debug builds can add sample data in the Simulator for screenshots.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Pulse counts your steps live while it's open, so today's steps update as you walk.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

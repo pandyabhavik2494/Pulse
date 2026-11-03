@@ -45,6 +45,7 @@ targets:
         UIUserInterfaceStyle: Dark
         NSHealthShareUsageDescription: Pulse reads your burned energy, steps, food from MyFitnessPal, weigh-ins from VeSync, heart and sleep from Apple Health to show your day and your journey.
         NSHealthUpdateUsageDescription: Pulse never writes to Apple Health. Debug builds can add sample data in the Simulator for screenshots.
+        NSMotionUsageDescription: Pulse counts your steps live while it's open, so today's steps update as you walk.
         CFBundleURLTypes:
           - CFBundleURLName: com.bhavikpandya.pulse
             CFBundleURLSchemes: [pulse]
@@ -101,6 +102,7 @@ targets:
         WKApplication: true
         WKCompanionAppBundleIdentifier: com.bhavikpandya.pulse
         NSHealthShareUsageDescription: Pulse reads your burned energy, steps and food from Apple Health to show today's balance on your wrist.
+        NSMotionUsageDescription: Pulse counts your steps live on your wrist while it's open.
         NSHealthUpdateUsageDescription: Pulse never writes to Apple Health. Debug builds can add sample data in the Simulator for screenshots.
     settings:
       base:
