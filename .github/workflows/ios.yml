@@ -1,0 +1,94 @@
+name: Build Pulse iOS
+
+on:
+  push:
+    paths:
+      - 'ios/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode and XcodeGen
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcodebuild -version
+          brew install xcodegen >/dev/null
+          xcodegen generate
+          xcodebuild -list
+
+      - name: Pick simulators
+        run: |
+          IPHONE=$(xcrun simctl list devices available -j | python3 -c 'import json,sys
+          d=json.load(sys.stdin)["devices"]
+          n=[x["udid"] for k,v in d.items() if "iOS" in k for x in v if "Pro Max" in x["name"]] or [x["udid"] for k,v in d.items() if "iOS" in k for x in v if "iPhone" in x["name"]]
+          print(n[-1])')
+          WATCH=$(xcrun simctl list devices available -j | python3 -c 'import json,sys
+          d=json.load(sys.stdin)["devices"]
+          n=[x["udid"] for k,v in d.items() if "watchOS" in k for x in v if "Ultra" in x["name"]] or [x["udid"] for k,v in d.items() if "watchOS" in k for x in v]
+          print(n[-1] if n else "")')
+          echo "IPHONE=$IPHONE" >> $GITHUB_ENV
+          echo "WATCH=$WATCH" >> $GITHUB_ENV
+          xcrun simctl list devices available | grep -E "$IPHONE|$WATCH" || true
+
+      # Compiles the app (with the embedded watch app) and runs the ported core tests.
+      - name: Build and test (iPhone simulator)
+        run: |
+          set -o pipefail
+          xcodebuild test -scheme Pulse -destination "id=$IPHONE" -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee xcodebuild-ios.log | grep -E "error:|warning: unre|Test Case.*(passed|failed)|TEST (SUCCEEDED|FAILED)|\*\* " || true
+          grep -q "TEST SUCCEEDED" xcodebuild-ios.log
+
+      - name: Build watch app (watch simulator)
+        if: env.WATCH != ''
+        run: |
+          set -o pipefail
+          SCHEME=$(xcodebuild -list -json | python3 -c 'import json,sys; s=json.load(sys.stdin)["project"]["schemes"]; print(next((x for x in s if "Watch" in x), ""))')
+          [ -z "$SCHEME" ] && { echo "no watch scheme"; exit 0; }
+          xcodebuild build -scheme "$SCHEME" -destination "id=$WATCH" -derivedDataPath build-watch \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee xcodebuild-watch.log | grep -E "error:|\*\* " || true
+          grep -q "BUILD SUCCEEDED" xcodebuild-watch.log
+
+      - name: Screenshots
+        if: success()
+        run: |
+          mkdir -p shots
+          APP=$(find build/Build/Products -name "Pulse.app" -path "*iphonesimulator*" | head -1)
+          xcrun simctl boot "$IPHONE" || true
+          xcrun simctl status_bar "$IPHONE" override --time 9:41 || true
+          xcrun simctl install "$IPHONE" "$APP"
+          BID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$APP/Info.plist")
+          xcrun simctl launch "$IPHONE" "$BID" -PulseDemoData YES
+          sleep 8
+          xcrun simctl io "$IPHONE" screenshot shots/iphone-launch.png
+          if [ -n "$WATCH" ]; then
+            WAPP=$(find build-watch/Build/Products -name "*.app" -path "*watchsimulator*" | head -1)
+            if [ -n "$WAPP" ]; then
+              xcrun simctl boot "$WATCH" || true
+              xcrun simctl install "$WATCH" "$WAPP"
+              WBID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$WAPP/Info.plist")
+              xcrun simctl launch "$WATCH" "$WBID" -PulseDemoData YES
+              sleep 8
+              xcrun simctl io "$WATCH" screenshot shots/watch-launch.png
+            fi
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pulse-ios-results
+          path: |
+            ios/xcodebuild-*.log
+            ios/shots/
+          if-no-files-found: ignore
