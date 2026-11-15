@@ -40,6 +40,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -297,7 +298,7 @@ fun FieldRow(
                 Icon(leading, null, tint = leadingColor, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
             }
-            Text(label, style = T.body.copy(color = C.ink, fontSize = 14.sp), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(label, style = T.body.copy(color = C.ink, fontSize = 14.sp), modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.width(8.dp))
             Text(value, style = T.label.copy(color = valueColor), maxLines = 1, softWrap = false)
             if (note != null) {
@@ -509,6 +510,13 @@ fun PullBox(refreshing: Boolean, onRefresh: () -> Unit, modifier: Modifier = Mod
         content = content,
     )
 }
+
+/**
+ * A regular-size phone (e.g. Galaxy S25 Edge, ~384 dp wide at default zoom) is narrower than the Fold's
+ * cover screen (~411 dp). Below 400 dp a few labels use shorter words so nothing gets cut off.
+ */
+@Composable
+fun narrowScreen(): Boolean = LocalConfiguration.current.screenWidthDp < 400
 
 /** Screen header: small muted line above a bold display title, with a trailing slot. */
 @Composable

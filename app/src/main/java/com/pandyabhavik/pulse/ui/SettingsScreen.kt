@@ -193,7 +193,8 @@ fun SettingsScreen(s: HomeState) {
                         if (ok) "Permissions" else "Allow access",
                         Modifier.weight(1f).testTag("settings_health"),
                         height = 44.dp,
-                        icon = Icons.Rounded.Favorite,
+                        // On a regular-size phone the heart would push "Allow access" out of the button.
+                        icon = if (narrowScreen() && !ok) null else Icons.Rounded.Favorite,
                     ) { ui.askHealth() }
                     PButton(
                         if (syncing) "Syncing…" else "Sync now",

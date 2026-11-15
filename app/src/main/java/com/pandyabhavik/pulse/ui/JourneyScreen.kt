@@ -379,7 +379,15 @@ private fun Timeline(s: HomeState, ps: PaceState) {
     val trend = s.trendKg ?: p.startKg
     PCard(Modifier.testTag("milestone_list")) {
         Lbl("Milestones", Icons.Rounded.Insights, C.wt, trailing = {
-            Text(if (ps.changed && ps.pace != null) "vs your current pace" else "at your 7-day pace", style = T.small.copy(fontSize = 11.5.sp))
+            val short = narrowScreen()
+            Text(
+                when {
+                    ps.changed && ps.pace != null -> if (short) "vs your pace" else "vs your current pace"
+                    else -> if (short) "at 7-day pace" else "at your 7-day pace"
+                },
+                style = T.small.copy(fontSize = 11.5.sp),
+                maxLines = 1,
+            )
         })
         Spacer(Modifier.height(10.dp))
         var aheadIndex = 0

@@ -249,7 +249,7 @@ private fun DashCell(tile: DashTile, s: HomeState, st: Status?, selected: Boolea
             softWrap = false,
             modifier = Modifier.padding(top = 6.dp).testTag("dash_value_${tile.id}"),
         )
-        Text(v?.unit ?: "no data yet", style = T.small.copy(fontSize = 13.sp, color = C.soft), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(v?.unit ?: "no data yet", style = T.small.copy(fontSize = 13.sp, color = C.soft), maxLines = 2, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.weight(1f).hIn(min = 8.dp))
         if (st != null && color != null) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("dash_status_${tile.id}")) {

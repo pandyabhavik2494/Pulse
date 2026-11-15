@@ -161,8 +161,8 @@ fun Onboarding(
                         ) { male = it == 0 }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PField(start, { start = digits(it, 5) }, "Start weight (kg)", "onboarding_weight", modifier = Modifier.weight(1f))
-                        PField(goal, { goal = digits(it, 5) }, "Goal weight (kg)", "onboarding_goal", modifier = Modifier.weight(1f))
+                        PField(start, { start = digits(it, 5) }, if (narrowScreen()) "Start (kg)" else "Start weight (kg)", "onboarding_weight", modifier = Modifier.weight(1f))
+                        PField(goal, { goal = digits(it, 5) }, if (narrowScreen()) "Goal (kg)" else "Goal weight (kg)", "onboarding_goal", modifier = Modifier.weight(1f))
                     }
                     if (startKg != null && goalKg != null && goalKg < startKg) {
                         PCard(background = androidx.compose.ui.graphics.Brush.linearGradient(listOf(C.wt.copy(alpha = 0.14f), Color.Transparent))) {
