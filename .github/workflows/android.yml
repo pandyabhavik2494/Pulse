@@ -58,7 +58,7 @@ jobs:
 
   # On an emulator: launch the real release APK, then walk every screen and widget over a fake Health
   # Connect with Bhavik's test data and save screenshots, at the Fold's cover-screen size and its
-  # inner-screen size.
+  # inner-screen size, and on a regular-size phone (Galaxy S25 Edge).
   device-tests:
     needs: build
     runs-on: ubuntu-latest
@@ -66,7 +66,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        screen: [cover-screen, inner-screen]
+        screen: [cover-screen, inner-screen, regular-phone]
         suite: [app-walk, actions, widgets]
     steps:
       - uses: actions/checkout@v4

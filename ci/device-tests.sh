@@ -4,7 +4,7 @@
 set -uo pipefail
 apk="$1"
 results="$2"
-screen="$3"     # cover-screen or inner-screen
+screen="$3"     # cover-screen, inner-screen or regular-phone
 suite="${4:-app-walk}"   # app-walk, actions or widgets: each runs on its own emulator in parallel
 pkg=com.pandyabhavik.pulse
 case "$suite" in
@@ -21,7 +21,13 @@ adb wait-for-device
 adb shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 1; done'
 sleep 5
 
-if [ "$screen" = cover-screen ]; then
+if [ "$screen" = regular-phone ]; then
+  # A regular-size phone: the Galaxy S25 Edge at its default FHD+ resolution (1080x2340, ~384x832 dp),
+  # narrower and shorter than the Fold's cover screen, with larger text too.
+  adb shell wm size 1080x2340
+  adb shell wm density 450
+  adb shell settings put system font_scale 1.15
+elif [ "$screen" = cover-screen ]; then
   adb shell wm size 1080x2520
   adb shell wm density 420
   # Larger text, as many people use on the small screen: nothing should be cut off.
